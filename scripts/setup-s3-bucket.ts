@@ -6,7 +6,7 @@ import {
   PutBucketPolicyCommand,
   PutBucketVersioningCommand,
   PutBucketLifecycleConfigurationCommand,
-  PutBucketNotificationConfigurationCommand,
+
   HeadBucketCommand,
 } from '@aws-sdk/client-s3';
 
@@ -28,15 +28,15 @@ async function setupS3Bucket() {
     } catch (error: any) {
       if (error.name === 'NotFound') {
         console.log('📦 Creating bucket...');
-        
+
         // Create bucket
         const createCommand = new CreateBucketCommand({
           Bucket: BUCKET_NAME,
           CreateBucketConfiguration: REGION !== 'us-east-1' ? {
-            LocationConstraint: REGION,
+            LocationConstraint: REGION as any,
           } : undefined,
         });
-        
+
         await s3Client.send(createCommand);
         console.log('✅ Bucket created successfully');
       } else {
@@ -171,7 +171,7 @@ async function setupS3Bucket() {
     // Create folder structure
     console.log('📁 Creating folder structure...');
     const folders = Object.values(S3_CONFIG.FOLDERS);
-    
+
     for (const folder of folders) {
       try {
         // Create a placeholder file to ensure folder exists
@@ -198,12 +198,12 @@ async function setupS3Bucket() {
     console.log('   • Versioning: Enabled');
     console.log('   • Lifecycle: Configured for cost optimization');
     console.log('   • Folders: Created for organized storage');
-    
+
     console.log('\n🔗 Next steps:');
     console.log('   1. Set up CloudFront distribution (optional but recommended)');
     console.log('   2. Configure your domain in CORS settings');
     console.log('   3. Test file uploads using the API');
-    
+
   } catch (error) {
     console.error('❌ S3 bucket setup failed:', error);
     process.exit(1);
@@ -214,7 +214,7 @@ async function createCloudFrontDistribution() {
   console.log('\n☁️  CloudFront distribution setup...');
   console.log('⚠️  Note: CloudFront setup requires additional configuration.');
   console.log('   Please set up CloudFront manually or use AWS CDK/Terraform.');
-  
+
   console.log('\n📋 Recommended CloudFront settings:');
   console.log(`   • Origin: ${BUCKET_NAME}.s3.${REGION}.amazonaws.com`);
   console.log('   • Viewer Protocol Policy: Redirect HTTP to HTTPS');
@@ -230,13 +230,13 @@ async function createCloudFrontDistribution() {
 async function testBucketSetup() {
   try {
     console.log('\n🧪 Testing bucket setup...');
-    
+
     // Test upload
     const { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-    
+
     const testKey = 'temp/test-file.txt';
     const testContent = 'S3 bucket test file';
-    
+
     // Upload test file
     const putCommand = new PutObjectCommand({
       Bucket: BUCKET_NAME,
@@ -246,7 +246,7 @@ async function testBucketSetup() {
     });
     await s3Client.send(putCommand);
     console.log('✅ Upload test passed');
-    
+
     // Download test file
     const getCommand = new GetObjectCommand({
       Bucket: BUCKET_NAME,
@@ -254,13 +254,13 @@ async function testBucketSetup() {
     });
     const getResult = await s3Client.send(getCommand);
     const downloadedContent = await getResult.Body?.transformToString();
-    
+
     if (downloadedContent === testContent) {
       console.log('✅ Download test passed');
     } else {
       throw new Error('Downloaded content does not match uploaded content');
     }
-    
+
     // Delete test file
     const deleteCommand = new DeleteObjectCommand({
       Bucket: BUCKET_NAME,
@@ -268,9 +268,9 @@ async function testBucketSetup() {
     });
     await s3Client.send(deleteCommand);
     console.log('✅ Delete test passed');
-    
+
     console.log('🎉 All tests passed! Bucket is ready for use.');
-    
+
   } catch (error) {
     console.error('❌ Bucket test failed:', error);
     throw error;

@@ -29,6 +29,8 @@
     "ai:health": "curl -f http://localhost:3000/api/health/ai || echo 'AI health check failed'",
     "ai:test": "curl -X POST http://localhost:3000/api/health/ai/test -H 'Content-Type: application/json' -d '{\"includeScriptTest\":true,\"includeSpeechTest\":true}' || echo 'AI test failed'",
     "test:config": "tsx scripts/test-config.ts",
+    "test:api": "tsx scripts/test-api-endpoints.ts",
+    "test:api:prod": "API_BASE_URL=https://your-domain.com/api tsx scripts/test-api-endpoints.ts",
     "prepare": "husky install"
   },
   "dependencies": {
