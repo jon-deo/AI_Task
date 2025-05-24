@@ -24,6 +24,8 @@
     "db:health": "tsx scripts/db-health.ts",
     "db:seed": "tsx scripts/db-setup.ts",
     "db:reset": "prisma migrate reset --force",
+    "aws:setup": "tsx scripts/setup-s3-bucket.ts",
+    "aws:health": "curl -f http://localhost:3000/api/health/aws || echo 'Health check failed'",
     "prepare": "husky install"
   },
   "dependencies": {
