@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 
-import { Toaster } from '@/components/ui/toaster';
+import { DefaultToaster } from '@/components/ui/toaster';
 import '@/styles/globals.css';
 
 const inter = Inter({
@@ -124,7 +124,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
           <div className='relative flex min-h-screen flex-col'>
             <main className='flex-1'>{children}</main>
           </div>
-          <Toaster />
+          <DefaultToaster />
         </ThemeProvider>
       </body>
     </html>
