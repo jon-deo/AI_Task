@@ -1,0 +1,543 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================
+// CELEBRITY MODELS
+// ================================
+
+model Celebrity {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  sport        Sport
+  position     String?
+  team         String?
+  nationality  String
+  birthDate    DateTime?
+  biography    String   @db.Text
+  achievements String[] @default([])
+  imageUrl     String?
+  thumbnailUrl String?
+  isActive     Boolean  @default(true)
+  isVerified   Boolean  @default(false)
+
+  // Social media links
+  socialLinks  Json?    // { twitter, instagram, facebook, etc. }
+
+  // SEO and metadata
+  metaTitle       String?
+  metaDescription String?
+  keywords        String[] @default([])
+
+  // Statistics
+  totalViews   BigInt @default(0)
+  totalLikes   BigInt @default(0)
+  totalShares  BigInt @default(0)
+  reelsCount   Int    @default(0)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  videoReels     VideoReel[]
+  userLikes      UserCelebrityLike[]
+  generationJobs GenerationJob[]
+
+  // Indexes for performance
+  @@index([sport, isActive])
+  @@index([name])
+  @@index([slug])
+  @@index([createdAt])
+  @@index([totalViews])
+  @@fulltext([name, biography])
+  @@map("celebrities")
+}
+
+// ================================
+// VIDEO REEL MODELS
+// ================================
+
+model VideoReel {
+  id          String      @id @default(cuid())
+  celebrityId String
+  title       String
+  description String      @db.Text
+  script      String      @db.Text
+
+  // Video file information
+  videoUrl     String
+  thumbnailUrl String
+  duration     Int         // in seconds
+  fileSize     BigInt      // in bytes
+  resolution   String      // e.g., "1920x1080"
+  bitrate      String      // e.g., "1000k"
+  format       String      // e.g., "mp4"
+
+  // AWS S3 metadata
+  s3Key           String  @unique
+  s3Bucket        String
+  cloudFrontUrl   String?
+
+  // AI generation metadata
+  aiModel         String? // e.g., "gpt-4-turbo-preview"
+  voiceModel      String? // e.g., "polly-neural"
+  voiceType       VoiceType?
+  processingTime  Int?    // in seconds
+  generationCost  Decimal? @db.Decimal(10, 4) // in USD
+
+  // Content status and moderation
+  status          VideoStatus @default(PENDING)
+  moderationFlags Json?       // Content moderation flags
+
+  // Engagement metrics
+  views     BigInt @default(0)
+  likes     BigInt @default(0)
+  shares    BigInt @default(0)
+  comments  BigInt @default(0)
+
+  // SEO and discoverability
+  tags         String[] @default([])
+  categories   String[] @default([])
+  isPublic     Boolean  @default(true)
+  isFeatured   Boolean  @default(false)
+  isPremium    Boolean  @default(false)
+
+  // Timestamps
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  celebrity    Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
+  userLikes    UserVideoLike[]
+  userShares   UserVideoShare[]
+  userViews    UserVideoView[]
+  comments     VideoComment[]
+  analytics    VideoAnalytics[]
+
+  // Indexes for performance
+  @@index([celebrityId, status])
+  @@index([status, isPublic])
+  @@index([createdAt, status])
+  @@index([views])
+  @@index([likes])
+  @@index([publishedAt])
+  @@index([isFeatured, isPublic])
+  @@index([tags])
+  @@fulltext([title, description])
+  @@map("video_reels")
+}
+
+// ================================
+// USER INTERACTION MODELS
+// ================================
+
+model User {
+  id          String   @id @default(cuid())
+  email       String?  @unique
+  username    String?  @unique
+  displayName String?
+  avatarUrl   String?
+
+  // User preferences
+  preferences Json?    // Theme, language, notification settings
+
+  // Device and session info
+  deviceId    String?  // For anonymous users
+  userAgent   String?
+  ipAddress   String?
+  country     String?
+  timezone    String?
+
+  // User status
+  isActive    Boolean  @default(true)
+  isBanned    Boolean  @default(false)
+  isVerified  Boolean  @default(false)
+
+  // Timestamps
+  lastActiveAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  videoLikes     UserVideoLike[]
+  videoShares    UserVideoShare[]
+  videoViews     UserVideoView[]
+  celebrityLikes UserCelebrityLike[]
+  comments       VideoComment[]
+  sessions       UserSession[]
+
+  // Indexes
+  @@index([email])
+  @@index([username])
+  @@index([deviceId])
+  @@index([isActive])
+  @@index([lastActiveAt])
+  @@map("users")
+}
+
+model UserSession {
+  id        String   @id @default(cuid())
+  userId    String
+  sessionId String   @unique
+  deviceId  String?
+  userAgent String?
+  ipAddress String?
+  country   String?
+
+  // Session data
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  duration  Int?     // in seconds
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([sessionId])
+  @@index([startedAt])
+  @@map("user_sessions")
+}
+
+model UserVideoLike {
+  id      String @id @default(cuid())
+  userId  String
+  videoId String
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video VideoReel @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  // Unique constraint
+  @@unique([userId, videoId])
+  @@index([userId])
+  @@index([videoId])
+  @@index([createdAt])
+  @@map("user_video_likes")
+}
+
+model UserVideoShare {
+  id       String      @id @default(cuid())
+  userId   String
+  videoId  String
+  platform SharePlatform
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video VideoReel @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([videoId])
+  @@index([platform])
+  @@index([createdAt])
+  @@map("user_video_shares")
+}
+
+model UserVideoView {
+  id              String   @id @default(cuid())
+  userId          String
+  videoId         String
+
+  // View tracking
+  watchDuration   Int      // in seconds
+  completionRate  Decimal  @db.Decimal(5, 2) // percentage (0-100)
+  isCompleted     Boolean  @default(false)
+
+  // Device and context
+  deviceType      String?  // mobile, tablet, desktop
+  viewSource      String?  // organic, recommended, search
+
+  createdAt       DateTime @default(now())
+
+  // Relations
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video VideoReel @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([videoId])
+  @@index([createdAt])
+  @@index([isCompleted])
+  @@map("user_video_views")
+}
+
+model UserCelebrityLike {
+  id          String @id @default(cuid())
+  userId      String
+  celebrityId String
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  celebrity Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
+
+  // Unique constraint
+  @@unique([userId, celebrityId])
+  @@index([userId])
+  @@index([celebrityId])
+  @@map("user_celebrity_likes")
+}
+
+// ================================
+// COMMENT SYSTEM
+// ================================
+
+model VideoComment {
+  id      String @id @default(cuid())
+  userId  String
+  videoId String
+  content String @db.Text
+
+  // Comment metadata
+  isEdited    Boolean @default(false)
+  isDeleted   Boolean @default(false)
+  isPinned    Boolean @default(false)
+
+  // Moderation
+  isApproved  Boolean @default(true)
+  isFlagged   Boolean @default(false)
+
+  // Engagement
+  likes       Int @default(0)
+  replies     Int @default(0)
+
+  // Hierarchy for replies
+  parentId    String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video    VideoReel      @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  parent   VideoComment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  children VideoComment[] @relation("CommentReplies")
+
+  // Indexes
+  @@index([videoId, isApproved])
+  @@index([userId])
+  @@index([parentId])
+  @@index([createdAt])
+  @@map("video_comments")
+}
+
+// ================================
+// ANALYTICS AND REPORTING
+// ================================
+
+model VideoAnalytics {
+  id      String @id @default(cuid())
+  videoId String
+  date    DateTime @db.Date
+
+  // Daily metrics
+  views         Int @default(0)
+  uniqueViews   Int @default(0)
+  likes         Int @default(0)
+  shares        Int @default(0)
+  comments      Int @default(0)
+
+  // Engagement metrics
+  avgWatchTime     Decimal @default(0) @db.Decimal(8, 2) // in seconds
+  completionRate   Decimal @default(0) @db.Decimal(5, 2) // percentage
+  likeRate         Decimal @default(0) @db.Decimal(5, 2) // percentage
+  shareRate        Decimal @default(0) @db.Decimal(5, 2) // percentage
+
+  // Device breakdown
+  mobileViews  Int @default(0)
+  tabletViews  Int @default(0)
+  desktopViews Int @default(0)
+
+  // Geographic data
+  topCountries Json? // { "US": 1000, "UK": 500, ... }
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  video VideoReel @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  // Unique constraint for daily analytics
+  @@unique([videoId, date])
+  @@index([videoId])
+  @@index([date])
+  @@map("video_analytics")
+}
+
+model SystemAnalytics {
+  id   String   @id @default(cuid())
+  date DateTime @db.Date
+
+  // Overall platform metrics
+  totalUsers       Int @default(0)
+  activeUsers      Int @default(0)
+  newUsers         Int @default(0)
+  totalVideos      Int @default(0)
+  newVideos        Int @default(0)
+  totalViews       BigInt @default(0)
+  totalLikes       BigInt @default(0)
+  totalShares      BigInt @default(0)
+
+  // Performance metrics
+  avgLoadTime      Decimal @default(0) @db.Decimal(8, 2) // in milliseconds
+  errorRate        Decimal @default(0) @db.Decimal(5, 2) // percentage
+
+  // Resource usage
+  storageUsed      BigInt @default(0) // in bytes
+  bandwidthUsed    BigInt @default(0) // in bytes
+  aiApiCalls       Int @default(0)
+  aiCost           Decimal @default(0) @db.Decimal(10, 4) // in USD
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Unique constraint for daily analytics
+  @@unique([date])
+  @@index([date])
+  @@map("system_analytics")
+}
+
+// ================================
+// CONTENT GENERATION TRACKING
+// ================================
+
+model GenerationJob {
+  id          String           @id @default(cuid())
+  celebrityId String
+  status      GenerationStatus @default(PENDING)
+
+  // Job configuration
+  prompt      String?  @db.Text
+  voiceType   VoiceType?
+  duration    Int?     // requested duration in seconds
+
+  // Processing details
+  scriptGenerated    Boolean @default(false)
+  voiceGenerated     Boolean @default(false)
+  videoGenerated     Boolean @default(false)
+
+  // Results
+  generatedScript    String? @db.Text
+  generatedTitle     String?
+  generatedVideoUrl  String?
+
+  // Error handling
+  errorMessage       String? @db.Text
+  retryCount         Int @default(0)
+
+  // Cost tracking
+  totalCost          Decimal @default(0) @db.Decimal(10, 4)
+
+  // Timestamps
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  celebrity Celebrity @relation(fields: [celebrityId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([status])
+  @@index([celebrityId])
+  @@index([createdAt])
+  @@map("generation_jobs")
+}
+
+// ================================
+// ENUMS
+// ================================
+
+enum Sport {
+  FOOTBALL
+  BASKETBALL
+  BASEBALL
+  SOCCER
+  TENNIS
+  GOLF
+  HOCKEY
+  BOXING
+  MMA
+  TRACK_AND_FIELD
+  SWIMMING
+  GYMNASTICS
+  CRICKET
+  RUGBY
+  VOLLEYBALL
+  BADMINTON
+  TABLE_TENNIS
+  CYCLING
+  SKIING
+  SNOWBOARDING
+  SURFING
+  SKATEBOARDING
+  WRESTLING
+  WEIGHTLIFTING
+  ARCHERY
+  FENCING
+  EQUESTRIAN
+  SAILING
+  ROWING
+  CLIMBING
+  OTHER
+}
+
+enum VideoStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  ARCHIVED
+  DELETED
+}
+
+enum VoiceType {
+  MALE_NARRATOR
+  FEMALE_NARRATOR
+  SPORTS_COMMENTATOR
+  DOCUMENTARY_STYLE
+  ENERGETIC_HOST
+  CALM_NARRATOR
+}
+
+enum SharePlatform {
+  TWITTER
+  FACEBOOK
+  INSTAGRAM
+  LINKEDIN
+  WHATSAPP
+  TELEGRAM
+  TIKTOK
+  YOUTUBE
+  REDDIT
+  DISCORD
+  EMAIL
+  COPY_LINK
+  OTHER
+}
+
+enum GenerationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
