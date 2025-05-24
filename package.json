@@ -26,6 +26,9 @@
     "db:reset": "prisma migrate reset --force",
     "aws:setup": "tsx scripts/setup-s3-bucket.ts",
     "aws:health": "curl -f http://localhost:3000/api/health/aws || echo 'Health check failed'",
+    "ai:health": "curl -f http://localhost:3000/api/health/ai || echo 'AI health check failed'",
+    "ai:test": "curl -X POST http://localhost:3000/api/health/ai/test -H 'Content-Type: application/json' -d '{\"includeScriptTest\":true,\"includeSpeechTest\":true}' || echo 'AI test failed'",
+    "test:config": "tsx scripts/test-config.ts",
     "prepare": "husky install"
   },
   "dependencies": {

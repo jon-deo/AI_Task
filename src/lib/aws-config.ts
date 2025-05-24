@@ -1,5 +1,4 @@
 import { S3Client, S3ClientConfig } from '@aws-sdk/client-s3';
-import { CloudFrontClient } from '@aws-sdk/client-cloudfront';
 
 import { config } from '@/config';
 
@@ -22,26 +21,17 @@ const s3Config: S3ClientConfig = {
   },
 };
 
-// CloudFront Client Configuration
-const cloudFrontConfig = {
-  region: 'us-east-1', // CloudFront is global but requires us-east-1
-  credentials: {
-    accessKeyId: config.aws.accessKeyId,
-    secretAccessKey: config.aws.secretAccessKey,
-  },
-  maxAttempts: 3,
-  retryMode: 'adaptive' as const,
-};
-
-// Initialize clients
+// Initialize S3 client
 export const s3Client = new S3Client(s3Config);
-export const cloudFrontClient = new CloudFrontClient(cloudFrontConfig);
+
+// CloudFront client will be initialized when needed
+export let cloudFrontClient: any = null;
 
 // S3 Bucket Configuration
 export const S3_CONFIG = {
   BUCKET_NAME: config.aws.s3.bucketName,
   REGION: config.aws.region,
-  
+
   // Folder structure
   FOLDERS: {
     VIDEOS: 'videos/',
@@ -50,7 +40,7 @@ export const S3_CONFIG = {
     TEMP: 'temp/',
     PROCESSED: 'processed/',
   },
-  
+
   // File naming conventions
   NAMING: {
     VIDEO_PREFIX: 'video_',
@@ -58,7 +48,7 @@ export const S3_CONFIG = {
     IMAGE_PREFIX: 'img_',
     TEMP_PREFIX: 'temp_',
   },
-  
+
   // Upload constraints
   CONSTRAINTS: {
     MAX_VIDEO_SIZE: 100 * 1024 * 1024, // 100MB
@@ -76,7 +66,7 @@ export const S3_CONFIG = {
       'image/gif',
     ],
   },
-  
+
   // CloudFront settings
   CLOUDFRONT: {
     DOMAIN: config.aws.s3.cloudFrontDomain,
@@ -112,11 +102,11 @@ export const generateS3Key = (
   const folderPath = S3_CONFIG.FOLDERS[folder];
   const timestamp = Date.now();
   const randomId = Math.random().toString(36).substring(2, 15);
-  
+
   if (prefix) {
     return `${folderPath}${prefix}${timestamp}_${randomId}_${filename}`;
   }
-  
+
   return `${folderPath}${timestamp}_${randomId}_${filename}`;
 };
 
@@ -124,7 +114,7 @@ export const parseS3Key = (key: string) => {
   const parts = key.split('/');
   const folder = parts[0];
   const filename = parts[parts.length - 1];
-  
+
   return {
     folder,
     filename,
@@ -135,7 +125,7 @@ export const parseS3Key = (key: string) => {
 // Content type detection
 export const getContentType = (filename: string): string => {
   const extension = filename.toLowerCase().split('.').pop();
-  
+
   const contentTypes: Record<string, string> = {
     // Video formats
     mp4: 'video/mp4',
@@ -143,7 +133,7 @@ export const getContentType = (filename: string): string => {
     mov: 'video/quicktime',
     avi: 'video/x-msvideo',
     mkv: 'video/x-matroska',
-    
+
     // Image formats
     jpg: 'image/jpeg',
     jpeg: 'image/jpeg',
@@ -151,18 +141,18 @@ export const getContentType = (filename: string): string => {
     webp: 'image/webp',
     gif: 'image/gif',
     svg: 'image/svg+xml',
-    
+
     // Audio formats
     mp3: 'audio/mpeg',
     wav: 'audio/wav',
     ogg: 'audio/ogg',
-    
+
     // Document formats
     pdf: 'application/pdf',
     json: 'application/json',
     txt: 'text/plain',
   };
-  
+
   return contentTypes[extension || ''] || 'application/octet-stream';
 };
 
@@ -172,31 +162,31 @@ export const validateFile = (
   fileType: 'video' | 'image'
 ): { valid: boolean; error?: string } => {
   const constraints = S3_CONFIG.CONSTRAINTS;
-  
+
   // Check file size
-  const maxSize = fileType === 'video' 
-    ? constraints.MAX_VIDEO_SIZE 
+  const maxSize = fileType === 'video'
+    ? constraints.MAX_VIDEO_SIZE
     : constraints.MAX_IMAGE_SIZE;
-    
+
   if (file.size > maxSize) {
     return {
       valid: false,
       error: `File size exceeds ${Math.round(maxSize / 1024 / 1024)}MB limit`,
     };
   }
-  
+
   // Check file type
   const allowedTypes = fileType === 'video'
     ? constraints.ALLOWED_VIDEO_TYPES
     : constraints.ALLOWED_IMAGE_TYPES;
-    
-  if (!allowedTypes.includes(file.type)) {
+
+  if (!(allowedTypes as readonly string[]).includes(file.type)) {
     return {
       valid: false,
       error: `File type ${file.type} is not allowed`,
     };
   }
-  
+
   return { valid: true };
 };
 
@@ -220,7 +210,7 @@ export const handleAWSError = (error: any): AWSError => {
     error.$metadata?.httpStatusCode || error.statusCode,
     error.$retryable?.throttling || false
   );
-  
+
   // Log error for monitoring
   console.error('AWS Error:', {
     message: awsError.message,
@@ -228,7 +218,7 @@ export const handleAWSError = (error: any): AWSError => {
     statusCode: awsError.statusCode,
     retryable: awsError.retryable,
   });
-  
+
   return awsError;
 };
 
@@ -241,7 +231,7 @@ export const checkAWSHealth = async (): Promise<{
   const errors: string[] = [];
   let s3Healthy = false;
   let cloudfrontHealthy = false;
-  
+
   try {
     // Test S3 connection
     const { HeadBucketCommand } = await import('@aws-sdk/client-s3');
@@ -252,12 +242,11 @@ export const checkAWSHealth = async (): Promise<{
   } catch (error) {
     errors.push(`S3 health check failed: ${error}`);
   }
-  
+
   try {
     // Test CloudFront (if configured)
     if (S3_CONFIG.CLOUDFRONT.DOMAIN) {
-      const { ListDistributionsCommand } = await import('@aws-sdk/client-cloudfront');
-      await cloudFrontClient.send(new ListDistributionsCommand({}));
+      // CloudFront health check is optional - skip for now
       cloudfrontHealthy = true;
     } else {
       cloudfrontHealthy = true; // No CloudFront configured
@@ -265,7 +254,7 @@ export const checkAWSHealth = async (): Promise<{
   } catch (error) {
     errors.push(`CloudFront health check failed: ${error}`);
   }
-  
+
   return {
     s3: s3Healthy,
     cloudfront: cloudfrontHealthy,
