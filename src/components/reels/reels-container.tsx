@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, memo } from 'react';
 import type { VideoReelWithDetails } from '@/types';
+import { debounce } from 'lodash';
 
 // Optimized dynamic imports with proper error boundaries
 const ReelItem = React.lazy(() =>
@@ -44,6 +45,26 @@ const useReels = (_options: any) => ({
   updateViews: async (_reelId: string) => {},
 });
 
+// Cache management
+const useVideoCache = () => {
+  const cache = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  const getCachedData = (key: string) => {
+    const cached = cache.current.get(key);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return cached.data;
+    }
+    return null;
+  };
+
+  const setCachedData = (key: string, data: any) => {
+    cache.current.set(key, { data, timestamp: Date.now() });
+  };
+
+  return { getCachedData, setCachedData };
+};
+
 interface ReelsContainerProps {
   initialReels?: VideoReelWithDetails[];
   autoPlay?: boolean;
@@ -60,6 +81,8 @@ export const ReelsContainer = memo(function ReelsContainer({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollTimeoutRef = useRef<number>();
+  const { getCachedData, setCachedData } = useVideoCache();
+  const [loadedReels, setLoadedReels] = useState<Set<string>>(new Set());
 
   const {
     reels,
@@ -82,12 +105,66 @@ export const ReelsContainer = memo(function ReelsContainer({
     rootMargin: '200px', // Increased for better UX
   });
 
-  // Memoized visible reels to reduce rendering overhead
+  // Preload adjacent videos
+  const preloadAdjacentVideos = useCallback((currentIndex: number) => {
+    const preloadIndexes = [currentIndex - 1, currentIndex + 1];
+    preloadIndexes.forEach(index => {
+      if (index >= 0 && index < reels.length) {
+        const reel = reels[index];
+        if (reel && !loadedReels.has(reel.id)) {
+          const video = new Image();
+          video.src = reel.thumbnailUrl;
+          setLoadedReels(prev => new Set([...prev, reel.id]));
+        }
+      }
+    });
+  }, [reels, loadedReels]);
+
+  // Enhanced scroll handling with debouncing
+  const handleScroll = useCallback(
+    debounce(() => {
+      if (!containerRef.current) return;
+      setIsScrolling(true);
+
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+
+      scrollTimeoutRef.current = window.setTimeout(() => {
+        setIsScrolling(false);
+        const container = containerRef.current;
+        if (!container) return;
+
+        const scrollTop = container.scrollTop;
+        const reelHeight = container.clientHeight;
+        const newIndex = Math.round(scrollTop / reelHeight);
+
+        if (newIndex !== currentIndex) {
+          setCurrentIndex(newIndex);
+          preloadAdjacentVideos(newIndex);
+          
+          container.scrollTo({
+            top: newIndex * reelHeight,
+            behavior: 'smooth',
+          });
+        }
+      }, 150);
+    }, 100),
+    [currentIndex, preloadAdjacentVideos]
+  );
+
+  // Memoize visible reels with caching
   const visibleReels = useMemo(() => {
     const start = Math.max(0, currentIndex - 1);
     const end = Math.min(reels.length, currentIndex + 3);
-    return reels.slice(start, end);
-  }, [reels, currentIndex]);
+    return reels.slice(start, end).map(reel => {
+      const cachedData = getCachedData(reel.id);
+      if (cachedData) {
+        return { ...reel, ...cachedData };
+      }
+      return reel;
+    });
+  }, [reels, currentIndex, getCachedData]);
 
   // Load more reels when scrolling near bottom
   useEffect(() => {
@@ -95,41 +172,6 @@ export const ReelsContainer = memo(function ReelsContainer({
       loadMore();
     }
   }, [inView, hasMore, loading, loadMore, enableInfiniteScroll]);
-
-  // Handle scroll events for snap behavior
-  const handleScroll = useCallback(() => {
-    if (!containerRef.current) return;
-
-    setIsScrolling(true);
-
-    // Clear existing timeout
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-
-    // Set timeout to detect scroll end
-    scrollTimeoutRef.current = window.setTimeout(() => {
-      setIsScrolling(false);
-
-      // Snap to nearest reel
-      const container = containerRef.current;
-      if (!container) return;
-
-      const scrollTop = container.scrollTop;
-      const reelHeight = container.clientHeight;
-      const newIndex = Math.round(scrollTop / reelHeight);
-
-      if (newIndex !== currentIndex) {
-        setCurrentIndex(newIndex);
-
-        // Smooth scroll to exact position
-        container.scrollTo({
-          top: newIndex * reelHeight,
-          behavior: 'smooth',
-        });
-      }
-    }, 150);
-  }, [currentIndex]);
 
   // Attach scroll listener
   useEffect(() => {

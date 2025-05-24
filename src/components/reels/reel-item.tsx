@@ -19,8 +19,74 @@ const Play = ({ className }: { className?: string }) => <div className={classNam
 const Pause = ({ className }: { className?: string }) => <div className={className}>⏸</div>;
 
 // Fallback components
-const VideoPlayer = ({ src, onClick, onDoubleClick, className }: any) =>
-  <video src={src} onClick={onClick} onDoubleClick={onDoubleClick} className={className} />;
+const VideoPlayer = ({ src, onClick, onDoubleClick, className, preload }: any) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [quality, setQuality] = useState<'auto' | 'high' | 'low'>('auto');
+
+  // Handle quality switching based on network conditions
+  useEffect(() => {
+    if ('connection' in navigator) {
+      const connection = (navigator as any).connection;
+      if (connection) {
+        const updateQuality = () => {
+          if (connection.saveData) {
+            setQuality('low');
+          } else if (connection.effectiveType === '4g') {
+            setQuality('high');
+          } else {
+            setQuality('auto');
+          }
+        };
+
+        connection.addEventListener('change', updateQuality);
+        updateQuality();
+        return () => connection.removeEventListener('change', updateQuality);
+      }
+    }
+  }, []);
+
+  // Handle video loading
+  useEffect(() => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      
+      // Set appropriate quality
+      if (quality === 'low') {
+        video.playbackRate = 0.75;
+      } else if (quality === 'high') {
+        video.playbackRate = 1;
+      }
+
+      // Handle loading state
+      const handleLoadedData = () => setIsLoaded(true);
+      video.addEventListener('loadeddata', handleLoadedData);
+      return () => video.removeEventListener('loadeddata', handleLoadedData);
+    }
+  }, [quality]);
+
+  return (
+    <div className="relative">
+      <video
+        ref={videoRef}
+        src={src}
+        onClick={onClick}
+        onDoubleClick={onDoubleClick}
+        className={className}
+        preload={preload}
+        playsInline
+        muted
+        loop={false}
+        controls={false}
+      />
+      {!isLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+        </div>
+      )}
+    </div>
+  );
+};
 const ShareModal = ({ isOpen, onClose }: any) => isOpen ? <div onClick={onClose}>Share Modal</div> : null;
 const CelebrityInfo = ({ celebrity }: any) => <div>{celebrity.name}</div>;
 
