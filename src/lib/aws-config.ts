@@ -1,6 +1,6 @@
 import { S3Client, S3ClientConfig } from '@aws-sdk/client-s3';
 
-import { config } from '@/config';
+import { config } from '../config';
 
 // S3 Client Configuration
 const s3Config: S3ClientConfig = {
@@ -29,7 +29,7 @@ export let cloudFrontClient: any = null;
 
 // S3 Bucket Configuration
 export const S3_CONFIG = {
-  BUCKET_NAME: config.aws.s3.bucketName,
+  BUCKET_NAME: config.aws.s3Bucket,
   REGION: config.aws.region,
 
   // Folder structure
@@ -69,7 +69,7 @@ export const S3_CONFIG = {
 
   // CloudFront settings
   CLOUDFRONT: {
-    DOMAIN: config.aws.s3.cloudFrontDomain,
+    DOMAIN: process.env.AWS_CLOUDFRONT_DOMAIN || undefined,
     CACHE_BEHAVIORS: {
       VIDEOS: {
         cachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad', // Managed-CachingOptimized

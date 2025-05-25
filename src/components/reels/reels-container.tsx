@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, memo } from 'react';
 import type { VideoReelWithDetails } from '@/types';
 import { debounce } from 'lodash';
+import { Video } from '@/types/video';
 
 // Optimized dynamic imports with proper error boundaries
 const ReelItem = React.lazy(() =>
@@ -69,6 +70,8 @@ interface ReelsContainerProps {
   initialReels?: VideoReelWithDetails[];
   autoPlay?: boolean;
   enableInfiniteScroll?: boolean;
+  onGenerate: (celebrity: string) => Promise<any>;
+  isGenerating: boolean;
 }
 
 // Optimized for high traffic with memoization and performance improvements
@@ -76,6 +79,8 @@ export const ReelsContainer = memo(function ReelsContainer({
   initialReels = [],
   autoPlay = true,
   enableInfiniteScroll = true,
+  onGenerate,
+  isGenerating,
 }: ReelsContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -83,6 +88,7 @@ export const ReelsContainer = memo(function ReelsContainer({
   const scrollTimeoutRef = useRef<number>();
   const { getCachedData, setCachedData } = useVideoCache();
   const [loadedReels, setLoadedReels] = useState<Set<string>>(new Set());
+  const [videos, setVideos] = useState<Video[]>([]);
 
   const {
     reels,
@@ -245,6 +251,16 @@ export const ReelsContainer = memo(function ReelsContainer({
       }
     }
   }, [currentIndex, reels.length]);
+
+  const handleGenerateVideo = async (celebrity: string) => {
+    try {
+      const video = await onGenerate(celebrity);
+      // Add the new video to the feed
+      setVideos((prev: Video[]) => [video, ...prev]);
+    } catch (error) {
+      console.error('Error generating video:', error);
+    }
+  };
 
   // Error state
   if (error && reels.length === 0) {

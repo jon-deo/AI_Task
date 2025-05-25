@@ -6,102 +6,105 @@ import {
   PutBucketPolicyCommand,
   PutBucketVersioningCommand,
   PutBucketLifecycleConfigurationCommand,
-
-  HeadBucketCommand,
+  GetBucketPolicyCommand,
+  S3Client,
+  BucketLocationConstraint,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 
-import { s3Client, S3_CONFIG } from '../src/lib/aws-config';
+import { config } from '../src/config';
 
-const BUCKET_NAME = S3_CONFIG.BUCKET_NAME;
-const REGION = S3_CONFIG.REGION;
+const FOLDERS = {
+  VIDEOS: 'videos/',
+  THUMBNAILS: 'thumbnails/',
+  IMAGES: 'images/',
+  TEMP: 'temp/',
+  PROCESSED: 'processed/',
+} as const;
+
+const BUCKET_NAME = config.aws.s3Bucket;
+const REGION = config.aws.region;
+
+const s3Client = new S3Client({
+  region: REGION,
+  credentials: {
+    accessKeyId: config.aws.accessKeyId,
+    secretAccessKey: config.aws.secretAccessKey,
+  },
+});
 
 async function setupS3Bucket() {
+  console.log('🚀 Setting up S3 bucket for Sports Celebrity Reels...');
+  console.log('📦 Bucket:', BUCKET_NAME);
+  console.log('🌍 Region:', REGION);
+
   try {
-    console.log('🚀 Setting up S3 bucket for Sports Celebrity Reels...');
-    console.log(`📦 Bucket: ${BUCKET_NAME}`);
-    console.log(`🌍 Region: ${REGION}`);
-
-    // Check if bucket already exists
+    // Check if bucket exists
     try {
-      await s3Client.send(new HeadBucketCommand({ Bucket: BUCKET_NAME }));
+      await s3Client.send(new GetBucketPolicyCommand({
+        Bucket: BUCKET_NAME,
+      }));
       console.log('✅ Bucket already exists');
-    } catch (error: any) {
-      if (error.name === 'NotFound') {
-        console.log('📦 Creating bucket...');
-
-        // Create bucket
-        const createCommand = new CreateBucketCommand({
-          Bucket: BUCKET_NAME,
-          CreateBucketConfiguration: REGION !== 'us-east-1' ? {
-            LocationConstraint: REGION as any,
-          } : undefined,
-        });
-
-        await s3Client.send(createCommand);
-        console.log('✅ Bucket created successfully');
-      } else {
-        throw error;
-      }
+    } catch (error) {
+      // Create bucket if it doesn't exist
+      await s3Client.send(new CreateBucketCommand({
+        Bucket: BUCKET_NAME,
+        CreateBucketConfiguration: {
+          LocationConstraint: REGION as BucketLocationConstraint,
+        },
+      }));
+      console.log('✅ Bucket created');
     }
 
     // Configure CORS
     console.log('🔧 Configuring CORS...');
-    const corsCommand = new PutBucketCorsCommand({
+    await s3Client.send(new PutBucketCorsCommand({
       Bucket: BUCKET_NAME,
       CORSConfiguration: {
         CORSRules: [
           {
             AllowedHeaders: ['*'],
             AllowedMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
-            AllowedOrigins: [
-              'http://localhost:3000',
-              'http://localhost:3001',
-              'https://*.vercel.app',
-              'https://your-domain.com', // Replace with your actual domain
-            ],
-            ExposeHeaders: ['ETag', 'x-amz-meta-*'],
+            AllowedOrigins: ['*'],
+            ExposeHeaders: ['ETag'],
             MaxAgeSeconds: 3000,
           },
         ],
       },
-    });
-    await s3Client.send(corsCommand);
+    }));
     console.log('✅ CORS configured');
 
-    // Configure bucket policy for public read access
+    // Configure bucket policy for authenticated access only
     console.log('🔐 Configuring bucket policy...');
     const bucketPolicy = {
       Version: '2012-10-17',
       Statement: [
         {
-          Sid: 'PublicReadGetObject',
+          Sid: 'AllowAuthenticatedAccess',
           Effect: 'Allow',
-          Principal: '*',
-          Action: 's3:GetObject',
-          Resource: `arn:aws:s3:::${BUCKET_NAME}/videos/*`,
-        },
-        {
-          Sid: 'PublicReadGetThumbnails',
-          Effect: 'Allow',
-          Principal: '*',
-          Action: 's3:GetObject',
-          Resource: `arn:aws:s3:::${BUCKET_NAME}/thumbnails/*`,
-        },
-        {
-          Sid: 'PublicReadGetImages',
-          Effect: 'Allow',
-          Principal: '*',
-          Action: 's3:GetObject',
-          Resource: `arn:aws:s3:::${BUCKET_NAME}/images/*`,
+          Principal: {
+            AWS: `arn:aws:iam::${process.env.AWS_ACCOUNT_ID}:root`,
+          },
+          Action: [
+            's3:GetObject',
+            's3:PutObject',
+            's3:DeleteObject',
+            's3:ListBucket',
+          ],
+          Resource: [
+            `arn:aws:s3:::${BUCKET_NAME}`,
+            `arn:aws:s3:::${BUCKET_NAME}/*`,
+          ],
         },
       ],
     };
 
-    const policyCommand = new PutBucketPolicyCommand({
+    await s3Client.send(new PutBucketPolicyCommand({
       Bucket: BUCKET_NAME,
       Policy: JSON.stringify(bucketPolicy),
-    });
-    await s3Client.send(policyCommand);
+    }));
     console.log('✅ Bucket policy configured');
 
     // Enable versioning
@@ -124,70 +127,66 @@ async function setupS3Bucket() {
           {
             ID: 'DeleteTempFiles',
             Status: 'Enabled',
-            Filter: {
-              Prefix: 'temp/',
-            },
+            Prefix: 'temp/',
             Expiration: {
-              Days: 1, // Delete temp files after 1 day
-            },
-          },
-          {
-            ID: 'TransitionToIA',
-            Status: 'Enabled',
-            Filter: {
-              Prefix: 'videos/',
-            },
-            Transitions: [
-              {
-                Days: 30,
-                StorageClass: 'STANDARD_IA', // Move to Infrequent Access after 30 days
-              },
-              {
-                Days: 90,
-                StorageClass: 'GLACIER', // Move to Glacier after 90 days
-              },
-            ],
-          },
-          {
-            ID: 'DeleteIncompleteMultipartUploads',
-            Status: 'Enabled',
-            AbortIncompleteMultipartUpload: {
-              DaysAfterInitiation: 7, // Clean up incomplete uploads after 7 days
-            },
-          },
-          {
-            ID: 'DeleteOldVersions',
-            Status: 'Enabled',
-            NoncurrentVersionExpiration: {
-              NoncurrentDays: 30, // Delete old versions after 30 days
-            },
-          },
-        ],
-      },
+              Days: 1
+            }
+          }
+        ]
+      }
     });
     await s3Client.send(lifecycleCommand);
     console.log('✅ Lifecycle rules configured');
 
     // Create folder structure
     console.log('📁 Creating folder structure...');
-    const folders = Object.values(S3_CONFIG.FOLDERS);
+    const folders = Object.values(FOLDERS);
 
     for (const folder of folders) {
-      try {
-        // Create a placeholder file to ensure folder exists
-        const { PutObjectCommand } = await import('@aws-sdk/client-s3');
-        const putCommand = new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: `${folder}.gitkeep`,
-          Body: '',
-          ContentType: 'text/plain',
-        });
-        await s3Client.send(putCommand);
-        console.log(`✅ Created folder: ${folder}`);
-      } catch (error) {
-        console.warn(`⚠️  Failed to create folder ${folder}:`, error);
-      }
+      await s3Client.send(new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: folder,
+        Body: ' ',
+        ContentType: 'text/plain'
+      }));
     }
+    console.log('✅ Folder structure created');
+
+    // Test upload, download, and delete
+    const testKey = 'temp/test-file.txt';
+    const testContent = 'S3 bucket test file';
+
+    // Upload test file
+    const putCommand = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: testKey,
+      Body: testContent,
+      ContentType: 'text/plain',
+    });
+    await s3Client.send(putCommand);
+    console.log('✅ Upload test passed');
+
+    // Download test file
+    const getCommand = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: testKey,
+    });
+    const getResult = await s3Client.send(getCommand);
+    const downloadedContent = await getResult.Body?.transformToString();
+
+    if (downloadedContent === testContent) {
+      console.log('✅ Download test passed');
+    } else {
+      throw new Error('Downloaded content does not match uploaded content');
+    }
+
+    // Delete test file
+    const deleteCommand = new DeleteObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: testKey,
+    });
+    await s3Client.send(deleteCommand);
+    console.log('✅ Delete test passed');
 
     console.log('\n🎉 S3 bucket setup completed successfully!');
     console.log('\n📋 Summary:');
@@ -232,7 +231,7 @@ async function testBucketSetup() {
     console.log('\n🧪 Testing bucket setup...');
 
     // Test upload
-    const { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+    const { GetObjectCommand, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
 
     const testKey = 'temp/test-file.txt';
     const testContent = 'S3 bucket test file';
@@ -289,7 +288,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  main();
+  setupS3Bucket();
 }
 
 export { setupS3Bucket, testBucketSetup };

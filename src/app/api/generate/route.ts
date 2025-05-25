@@ -5,6 +5,8 @@ import { videoGenerationQueue } from '@/services/queue-manager';
 import { VideoGenerationService } from '@/services/video-generation';
 import { CelebrityService } from '@/services/database';
 import type { VideoGenerationRequest } from '@/services/video-generation';
+import { generateVideo } from '@/lib/ai/generate';
+import { prisma } from '@/lib/db/prisma';
 
 // Request validation schema
 const generateVideoRequestSchema = z.object({
@@ -47,96 +49,39 @@ function checkRateLimit(clientId: string): boolean {
 /**
  * POST /api/generate - Generate AI video
  */
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
   try {
-    // Rate limiting
-    const clientId = request.ip || 'unknown';
-    if (!checkRateLimit(clientId)) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Rate limit exceeded. Maximum 5 generations per hour.' 
-        },
-        { status: 429 }
-      );
-    }
-
-    // Parse and validate request
-    const body = await request.json();
-    const validatedData = generateVideoRequestSchema.parse(body);
-
-    // Get celebrity data
-    const celebrity = await CelebrityService.getById(validatedData.celebrityId);
+    const { celebrity } = await req.json();
+    
     if (!celebrity) {
       return NextResponse.json(
-        { success: false, error: 'Celebrity not found' },
-        { status: 404 }
-      );
-    }
-
-    // Build generation request
-    const generationRequest: VideoGenerationRequest = {
-      celebrity,
-      duration: validatedData.duration,
-      voiceType: validatedData.voiceType,
-      voiceRegion: validatedData.voiceRegion,
-      customPrompt: validatedData.customPrompt,
-      imageUrls: validatedData.imageUrls,
-      style: validatedData.style,
-      quality: validatedData.quality,
-      includeSubtitles: validatedData.includeSubtitles,
-    };
-
-    // Check if should use queue or process immediately
-    const useQueue = validatedData.useQueue !== false; // Default to true
-
-    if (useQueue) {
-      // Add to queue
-      const jobId = await videoGenerationQueue.addJob(
-        generationRequest,
-        validatedData.priority || 3
-      );
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          jobId,
-          status: 'queued',
-          message: 'Video generation job added to queue',
-          estimatedWaitTime: videoGenerationQueue.getMetrics().averageProcessingTime,
-        },
-      });
-    } else {
-      // Process immediately (for testing or high-priority requests)
-      const result = await VideoGenerationService.generateVideo(generationRequest);
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          ...result,
-          status: 'completed',
-        },
-      });
-    }
-  } catch (error) {
-    console.error('Video generation error:', error);
-    
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Invalid request parameters',
-          details: error.errors 
-        },
+        { error: 'Celebrity name is required' },
         { status: 400 }
       );
     }
 
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Video generation failed' 
+    // Generate video content
+    const { script, audioUrl } = await generateVideo(celebrity);
+
+    // Create video record in database
+    const video = await prisma.video.create({
+      data: {
+        title: `${celebrity}'s Career Highlights`,
+        description: script,
+        s3Url: audioUrl,
+        metadata: {
+          celebrity,
+          script,
+          status: 'PROCESSING',
+        },
       },
+    });
+
+    return NextResponse.json(video);
+  } catch (error) {
+    console.error('Error in video generation:', error);
+    return NextResponse.json(
+      { error: 'Failed to generate video' },
       { status: 500 }
     );
   }

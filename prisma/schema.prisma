@@ -539,3 +539,14 @@ enum GenerationStatus {
   FAILED
   CANCELLED
 }
+
+model Video {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  s3Url       String
+  metadata    Json
+  status      VideoStatus @default(PROCESSING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
