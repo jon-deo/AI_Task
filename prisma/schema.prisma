@@ -60,7 +60,6 @@ model Celebrity {
   @@index([slug])
   @@index([createdAt])
   @@index([totalViews])
-  @@fulltext([name, biography])
   @@map("celebrities")
 }
 
@@ -123,8 +122,8 @@ model VideoReel {
   userLikes    UserVideoLike[]
   userShares   UserVideoShare[]
   userViews    UserVideoView[]
-  comments     VideoComment[]
   analytics    VideoAnalytics[]
+  videoComments VideoComment[]
 
   // Indexes for performance
   @@index([celebrityId, status])
@@ -135,7 +134,6 @@ model VideoReel {
   @@index([publishedAt])
   @@index([isFeatured, isPublic])
   @@index([tags])
-  @@fulltext([title, description])
   @@map("video_reels")
 }
 

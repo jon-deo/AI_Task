@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
-import { ThemeProvider } from 'next-themes';
+import { ThemeProvider } from '@/components/providers/theme-provider';
 
 import { DefaultToaster } from '@/components/ui/toaster';
 import '@/styles/globals.css';
