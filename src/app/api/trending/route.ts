@@ -87,14 +87,14 @@ export async function GET(request: NextRequest) {
     if (validatedParams.type === 'reels') {
       // Get trending reels
       const where: any = {
-        isPublished: true,
+        isPublic: true,
         ...(dateFilter && { createdAt: { gte: dateFilter } }),
-        ...(validatedParams.sport && { 
-          celebrity: { sport: validatedParams.sport } 
+        ...(validatedParams.sport && {
+          celebrity: { sport: validatedParams.sport }
         }),
       };
 
-      const trendingReels = await prisma.reel.findMany({
+      const trendingReels = await prisma.videoReel.findMany({
         where,
         include: {
           celebrity: {
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
           },
           _count: {
             select: {
-              comments: {
+              videoComments: {
                 where: { isApproved: true },
               },
             },
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         period: validatedParams.period,
         data: trendingReels.map(reel => ({
           ...reel,
-          commentsCount: reel._count.comments,
+          commentsCount: reel._count.videoComments,
           _count: undefined,
         })),
         metadata: {
@@ -184,13 +184,13 @@ export async function GET(request: NextRequest) {
         by: ['sport'],
         where: {
           isActive: true,
-          ...(dateFilter && { 
-            reels: { 
-              some: { 
+          ...(dateFilter && {
+            videoReels: {
+              some: {
                 createdAt: { gte: dateFilter },
-                isPublished: true 
-              } 
-            } 
+                isPublic: true
+              }
+            }
           }),
         },
         _sum: {
@@ -300,10 +300,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Get featured reels
-    const featuredReels = await prisma.reel.findMany({
+    const featuredReels = await prisma.videoReel.findMany({
       where: {
-        isPublished: true,
-        featured: true,
+        isPublic: true,
+        isFeatured: true,
       },
       include: {
         celebrity: {
@@ -325,7 +325,6 @@ export async function POST(request: NextRequest) {
     const featuredCelebrities = await prisma.celebrity.findMany({
       where: {
         isActive: true,
-        featured: true,
       },
       select: {
         id: true,
@@ -351,9 +350,9 @@ export async function POST(request: NextRequest) {
     };
 
     // Cache featured content for 2 hours
-    await cacheManager.set(cacheKey, featuredContent, { 
-      ttl: 7200, 
-      tags: ['featured', 'reel', 'celebrity'] 
+    await cacheManager.set(cacheKey, featuredContent, {
+      ttl: 7200,
+      tags: ['featured', 'reel', 'celebrity']
     });
 
     return NextResponse.json({

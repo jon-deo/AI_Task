@@ -4,10 +4,10 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiting';
 import { cacheManager, CACHE_CONFIGS, CACHE_KEYS } from '@/lib/caching';
-import { 
-  parsePaginationParams, 
-  createPaginationResult, 
-  PAGINATION_CONFIGS 
+import {
+  parsePaginationParams,
+  createPaginationResult,
+  PAGINATION_CONFIGS
 } from '@/lib/pagination';
 
 // Request validation schema
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
             totalLikes: true,
             reelsCount: true,
           },
-          orderBy: validatedParams.sort === 'relevance' 
+          orderBy: validatedParams.sort === 'relevance'
             ? [{ totalViews: 'desc' }, { totalLikes: 'desc' }]
             : { [paginationParams.sort]: paginationParams.order },
           skip: validatedParams.type === 'celebrities' ? paginationParams.offset : 0,
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
     // Search reels
     if (validatedParams.type === 'all' || validatedParams.type === 'reels') {
       const reelWhere: any = {
-        isPublished: true,
+        isPublic: true,
         OR: [
           { title: { contains: searchTerm, mode: 'insensitive' } },
           { description: { contains: searchTerm, mode: 'insensitive' } },
@@ -158,9 +158,9 @@ export async function GET(request: NextRequest) {
       };
 
       if (validatedParams.sport) {
-        reelWhere.celebrity = { 
+        reelWhere.celebrity = {
           ...reelWhere.celebrity,
-          sport: validatedParams.sport 
+          sport: validatedParams.sport
         };
       }
 
@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
       }
 
       const [reels, reelCount] = await Promise.all([
-        prisma.reel.findMany({
+        prisma.videoReel.findMany({
           where: reelWhere,
           include: {
             celebrity: {
@@ -190,25 +190,25 @@ export async function GET(request: NextRequest) {
             },
             _count: {
               select: {
-                comments: {
+                videoComments: {
                   where: { isApproved: true },
                 },
               },
             },
           },
-          orderBy: validatedParams.sort === 'relevance' 
+          orderBy: validatedParams.sort === 'relevance'
             ? [{ views: 'desc' }, { likes: 'desc' }]
             : { [paginationParams.sort]: paginationParams.order },
           skip: validatedParams.type === 'reels' ? paginationParams.offset : 0,
           take: validatedParams.type === 'reels' ? paginationParams.limit : 10,
         }),
-        prisma.reel.count({ where: reelWhere }),
+        prisma.videoReel.count({ where: reelWhere }),
       ]);
 
       // Transform reels
       results.reels = reels.map(reel => ({
         ...reel,
-        commentsCount: reel._count.comments,
+        commentsCount: reel._count.videoComments,
         _count: undefined,
       }));
 

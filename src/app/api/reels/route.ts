@@ -4,12 +4,12 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiting';
 import { cacheManager, CACHE_CONFIGS, CACHE_KEYS } from '@/lib/caching';
-import { 
-  parsePaginationParams, 
-  createPaginationResult, 
-  buildPrismaOrderBy, 
+import {
+  parsePaginationParams,
+  createPaginationResult,
+  buildPrismaOrderBy,
   buildPrismaWhere,
-  PAGINATION_CONFIGS 
+  PAGINATION_CONFIGS
 } from '@/lib/pagination';
 
 // Request validation schemas
@@ -117,13 +117,13 @@ export async function GET(request: NextRequest) {
       where.celebrity = { sport: validatedParams.sport };
     }
     if (validatedParams.isPublished !== undefined) {
-      where.isPublished = validatedParams.isPublished;
+      where.isPublic = validatedParams.isPublished;
     } else {
       // Default to published reels for public API
-      where.isPublished = true;
+      where.isPublic = true;
     }
     if (validatedParams.featured !== undefined) {
-      where.featured = validatedParams.featured;
+      where.isFeatured = validatedParams.featured;
     }
     if (validatedParams.minDuration || validatedParams.maxDuration) {
       where.duration = {};
@@ -275,15 +275,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Create reel
+    const { isPublished, featured, ...reelData } = validatedData;
     const reel = await prisma.videoReel.create({
       data: {
-        ...validatedData,
+        title: reelData.title,
+        description: reelData.description || '',
+        celebrityId: reelData.celebrityId,
+        videoUrl: reelData.videoUrl,
+        thumbnailUrl: reelData.thumbnailUrl || undefined,
+        duration: reelData.duration,
+        tags: reelData.tags || [],
+        metaTitle: reelData.metaTitle || undefined,
+        metaDescription: reelData.metaDescription || undefined,
         slug: uniqueSlug,
-        isPublished: validatedData.isPublished ?? false,
-        featured: validatedData.featured ?? false,
+        isPublic: isPublished ?? false,
+        isFeatured: featured ?? false,
         views: BigInt(0),
         likes: BigInt(0),
         shares: BigInt(0),
+        script: '', // Required field
+        fileSize: BigInt(0), // Required field
+        resolution: '1080p', // Required field
+        bitrate: '2000', // Required field
+        format: 'mp4', // Required field
+        status: 'PROCESSING', // Required field
+        s3Key: '', // Required field
+        s3Bucket: '', // Required field
       },
       include: {
         celebrity: {

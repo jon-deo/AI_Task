@@ -158,50 +158,83 @@ export class SpeechSynthesisService {
     combinedAudioUrl?: string;
     combinedS3Key?: string;
   }> {
-    // Split text into chunks (max 3000 characters per chunk)
-    const chunks = request.text.match(/.{1,3000}[.!?]?/g) || [request.text];
-    const results: SpeechSynthesisResult[] = [];
+    try {
+      // Split text into chunks (max 3000 characters per chunk)
+      const chunks = request.text.match(/.{1,3000}[.!?]?/g) || [request.text];
+      const results: SpeechSynthesisResult[] = [];
 
-    for (const chunk of chunks) {
-      const result = await this.synthesizeSpeech({
-        ...request,
-        text: chunk,
-      }, uploadToS3);
-      results.push(result);
-    }
-
-    // If we have multiple chunks and S3 upload is enabled, combine them
-    if (chunks.length > 1 && uploadToS3) {
-      try {
-        const combinedBuffer = Buffer.concat(results.map(r => r.audioBuffer));
-        const filename = `voice_combined_${Date.now()}_${Math.random().toString(36).substring(2)}.${request.outputFormat || 'mp3'}`;
+      // Synthesize each chunk
+      for (const chunk of chunks) {
+        const result = await this.synthesizeSpeech({
+          ...request,
+          text: chunk,
+        }, uploadToS3);
         
-        const uploadResult = await S3Service.uploadFile(combinedBuffer, {
-          folder: 'TEMP',
-          filename,
-          contentType: `audio/${request.outputFormat || 'mp3'}`,
-          metadata: {
-            voiceType: request.voiceType,
-            voiceRegion: request.voiceRegion || 'US',
-            textLength: request.text.length.toString(),
-            generatedAt: new Date().toISOString(),
-            isCombined: 'true',
-            chunkCount: chunks.length.toString(),
-          },
-        });
+        // Ensure we have a valid audio buffer
+        if (!result.audioBuffer) {
+          throw new Error('Failed to generate audio buffer for chunk');
+        }
         
-        return {
-          chunks: results,
-          combinedAudioUrl: uploadResult.url,
-          combinedS3Key: uploadResult.key,
-        };
-      } catch (uploadError) {
-        console.error('Failed to upload combined audio to S3:', uploadError);
-        // Continue without combined S3 upload - individual chunks are still available
+        results.push(result);
       }
-    }
 
-    return { chunks: results };
+      // Ensure we have at least one valid result
+      if (results.length === 0) {
+        throw new Error('No valid speech synthesis results');
+      }
+
+      // Always combine the audio buffers
+      const validBuffers = results
+        .filter(r => r.audioBuffer && r.audioBuffer.length > 0)
+        .map(r => r.audioBuffer);
+
+      if (validBuffers.length === 0) {
+        throw new Error('No valid audio buffers to combine');
+      }
+
+      const combinedBuffer = Buffer.concat(validBuffers);
+
+      // If S3 upload is enabled, try to upload the combined audio
+      if (uploadToS3) {
+        try {
+          const filename = `voice_combined_${Date.now()}_${Math.random().toString(36).substring(2)}.${request.outputFormat || 'mp3'}`;
+          
+          const uploadResult = await S3Service.uploadFile(combinedBuffer, {
+            folder: 'TEMP',
+            filename,
+            contentType: `audio/${request.outputFormat || 'mp3'}`,
+            metadata: {
+              voiceType: request.voiceType,
+              voiceRegion: request.voiceRegion || 'US',
+              textLength: request.text.length.toString(),
+              generatedAt: new Date().toISOString(),
+              isCombined: 'true',
+              chunkCount: chunks.length.toString(),
+            },
+          });
+          
+          return {
+            chunks: results,
+            combinedAudioUrl: uploadResult.url,
+            combinedS3Key: uploadResult.key,
+          };
+        } catch (uploadError) {
+          console.error('Failed to upload combined audio to S3:', uploadError);
+          // Continue without S3 upload - we still have the combined buffer
+        }
+      }
+
+      // If we get here, either S3 upload is disabled or it failed
+      // Add the combined buffer to the first chunk's result
+      if (results.length > 0) {
+        results[0].audioBuffer = combinedBuffer;
+      }
+
+      return { chunks: results };
+    } catch (error) {
+      console.error('Long text synthesis error:', error);
+      throw new Error(`Long text synthesis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   /**

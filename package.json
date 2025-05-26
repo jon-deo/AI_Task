@@ -32,7 +32,12 @@
     "test:config": "tsx scripts/test-config.ts",
     "test:api": "tsx scripts/test-api-endpoints.ts",
     "test:api:prod": "API_BASE_URL=https://your-domain.com/api tsx scripts/test-api-endpoints.ts",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "test:workflows": "tsx scripts/test-complete-workflow.ts",
+    "setup:ffmpeg": "tsx scripts/setup-ffmpeg.ts",
+    "test:video": "tsx scripts/test-video-generation.ts",
+    "test:simple": "tsx scripts/test-simple-video.ts",
+    "test:minimal": "tsx scripts/test-minimal-video.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.478.0",
@@ -40,10 +45,12 @@
     "@faker-js/faker": "^9.8.0",
     "@hookform/resolvers": "^3.3.2",
     "@prisma/client": "^5.7.1",
+    "@types/fluent-ffmpeg": "^2.1.27",
     "aws-sdk": "^2.1515.0",
     "axios": "^1.6.2",
     "clsx": "^2.0.0",
     "dotenv": "^16.5.0",
+    "fluent-ffmpeg": "^2.1.3",
     "framer-motion": "^10.16.16",
     "hls.js": "^1.4.14",
     "lucide-react": "^0.303.0",

@@ -2,8 +2,9 @@ import sharp from 'sharp';
 
 import { AIScriptGenerationService, type ScriptGenerationRequest } from './ai-script-generation';
 import { SpeechSynthesisService, type SpeechSynthesisRequest } from './speech-synthesis';
+import { VideoComposer } from './video-composer';
+import { ImageGenerator } from './image-generator';
 import { S3Service } from './s3';
-import { CloudFrontService } from './cloudfront';
 import type { Celebrity, GenerationJob } from '@/types';
 import { VoiceType } from '@/types';
 import { prisma } from '@/lib/prisma';
@@ -180,7 +181,7 @@ export class VideoGenerationService {
 
       // Step 4: Generate video
       const videoResult = await this.createVideo({
-        audioBuffer: speechResult.combinedAudioUrl ? 
+        audioBuffer: speechResult.combinedAudioUrl ?
           await this.downloadAudioFromUrl(speechResult.combinedAudioUrl) :
           Buffer.concat(speechResult.chunks.map(chunk => chunk.audioBuffer)),
         images,
@@ -463,10 +464,19 @@ export class VideoGenerationService {
       }
     }
 
-    // If no images available, create a placeholder
+    // If no images available, generate celebrity images
     if (images.length === 0) {
-      const placeholder = await this.createPlaceholderImage(request.celebrity);
-      images.push(placeholder);
+      const generatedImages = await ImageGenerator.generateCelebrityImages(
+        request.celebrity,
+        3, // Generate 3 images for variety
+        {
+          width: 1920,
+          height: 1080,
+          quality: 90,
+          format: 'jpeg',
+        }
+      );
+      images.push(...generatedImages);
     }
 
     return images;
@@ -490,7 +500,7 @@ export class VideoGenerationService {
   }
 
   /**
-   * Create video from audio and images
+   * Create video from audio and images using FFmpeg
    */
   private static async createVideo(params: {
     audioBuffer: Buffer;
@@ -505,31 +515,53 @@ export class VideoGenerationService {
     videoS3Key: string;
     fileSize: number;
   }> {
-    // In a real implementation, you would use FFmpeg to create the video
-    // For now, we'll simulate video creation and upload the first image as a placeholder
-    const { images, duration, resolution } = params;
-    const videoBuffer = images[0] ?? Buffer.alloc(1); // fallback to non-undefined buffer
+    const { audioBuffer, images, duration, resolution, script, includeSubtitles } = params;
 
-    // Upload video to S3
-    const filename = `video_${Date.now()}_${Math.random().toString(36).substring(2)}.mp4`;
-    const uploadResult = await S3Service.uploadFile(videoBuffer, {
-      folder: 'VIDEOS',
-      filename,
-      contentType: 'video/mp4',
-      metadata: {
-        duration: duration.toString(),
-        resolution,
-        generatedAt: new Date().toISOString(),
-        type: 'ai-generated',
-      },
-    });
+    try {
+      // Use VideoComposer to create the actual video
+      const compositionResult = await VideoComposer.composeVideo({
+        audioBuffer,
+        images,
+        duration,
+        resolution: resolution as '720p' | '1080p' | '480p',
+        script,
+        includeSubtitles: includeSubtitles || false,
+        fps: 30,
+        bitrate: resolution === '1080p' ? '3000k' : resolution === '720p' ? '2000k' : '1000k',
+        backgroundColor: '#000000',
+        transitionDuration: 0.5,
+      });
 
-    return {
-      videoBuffer,
-      videoUrl: uploadResult.url,
-      videoS3Key: uploadResult.key,
-      fileSize: videoBuffer.length,
-    };
+      // Upload the composed video to S3
+      const filename = `video_${Date.now()}_${Math.random().toString(36).substring(2)}.mp4`;
+      const uploadResult = await S3Service.uploadFile(compositionResult.videoBuffer, {
+        folder: 'VIDEOS',
+        filename,
+        contentType: 'video/mp4',
+        metadata: {
+          duration: duration.toString(),
+          resolution: compositionResult.metadata.resolution,
+          generatedAt: new Date().toISOString(),
+          type: 'ai-generated',
+          fps: compositionResult.metadata.fps.toString(),
+          bitrate: compositionResult.metadata.bitrate,
+          fileSize: compositionResult.metadata.fileSize.toString(),
+        },
+      });
+
+      // Cleanup temporary files
+      await VideoComposer.cleanup(compositionResult.tempFiles);
+
+      return {
+        videoBuffer: compositionResult.videoBuffer,
+        videoUrl: uploadResult.url,
+        videoS3Key: uploadResult.key,
+        fileSize: compositionResult.metadata.fileSize,
+      };
+    } catch (error) {
+      console.error('Video creation failed:', error);
+      throw new Error(`Failed to create video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   /**
@@ -539,12 +571,26 @@ export class VideoGenerationService {
     videoBuffer: Buffer,
     celebrity: Celebrity
   ): Promise<{ key: string; url: string }> {
-    // For now, create a thumbnail image
-    // In production, extract frame from video
-    const thumbnailBuffer = await this.createPlaceholderImage(celebrity);
+    // Generate a thumbnail image using ImageGenerator
+    // In production, you could extract frame from video
+    const thumbnailImages = await ImageGenerator.generateCelebrityImages(
+      celebrity,
+      1, // Just one thumbnail
+      {
+        width: 1280,
+        height: 720,
+        quality: 85,
+        format: 'jpeg',
+      }
+    );
+    const thumbnailBuffer = thumbnailImages[0];
+
+    if (!thumbnailBuffer) {
+      throw new Error('Failed to generate thumbnail image');
+    }
 
     const filename = `thumb_${Date.now()}_${Math.random().toString(36).substring(2)}.jpg`;
-    
+
     const uploadResult = await S3Service.uploadFile(thumbnailBuffer, {
       folder: 'THUMBNAILS',
       filename,
