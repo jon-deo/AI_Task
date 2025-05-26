@@ -147,6 +147,7 @@ export interface VideoReelWithDetails extends VideoReel {
     userViews: number;
     comments: number;
   };
+  commentsCount?: number;
 }
 
 // Custom interfaces for API responses and requests

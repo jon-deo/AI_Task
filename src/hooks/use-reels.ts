@@ -32,7 +32,15 @@ const fetcher = async (url: string): Promise<ApiResponse<{ items: VideoReelWithD
   if (!response.ok) {
     throw new Error('Failed to fetch reels');
   }
-  return response.json();
+  const data = await response.json();
+  // Transform the nested data structure
+  return {
+    success: data.success,
+    data: {
+      items: data.data.data,
+      pagination: data.data.pagination
+    }
+  };
 };
 
 export function useReels(options: UseReelsOptions = {}): UseReelsReturn {
@@ -86,8 +94,8 @@ export function useReels(options: UseReelsOptions = {}): UseReelsReturn {
       } else {
         // Subsequent pages - append to existing reels
         setAllReels(prev => {
-          const existingIds = new Set(prev.map(reel => reel.id));
-          const uniqueNewReels = newReels.filter(reel => !existingIds.has(reel.id));
+          const existingIds = new Set(prev.map((reel: VideoReelWithDetails) => reel.id));
+          const uniqueNewReels = newReels.filter((reel: VideoReelWithDetails) => !existingIds.has(reel.id));
           return [...prev, ...uniqueNewReels];
         });
       }

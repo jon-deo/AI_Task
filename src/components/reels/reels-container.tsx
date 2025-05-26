@@ -66,13 +66,7 @@ export const ReelsContainer = memo(function ReelsContainer({
   onGenerate,
   isGenerating,
 }: ReelsContainerProps) {
-  const [hasMounted, setHasMounted] = useState(false);
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
-  if (!hasMounted) {
-    return <div className="h-full bg-black" />;
-  }
+  // Initialize all state with safe default values
   const containerRef = useRef<HTMLDivElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isScrolling, setIsScrolling] = useState(false);
@@ -81,34 +75,39 @@ export const ReelsContainer = memo(function ReelsContainer({
   const [loadedReels, setLoadedReels] = useState<Set<string>>(new Set());
   const [videos, setVideos] = useState<Video[]>([]);
 
+  // Destructure with safe defaults
   const {
-    reels,
-    loading,
-    error,
-    hasMore,
-    loadMore,
-    refresh,
-    likeReel,
-    shareReel,
-    updateViews,
+    reels: fetchedReels = [],
+    loading = false,
+    error = null,
+    hasMore = false,
+    loadMore = () => {},
+    refresh = () => {},
+    likeReel = async () => {},
+    shareReel = async () => {},
+    updateViews = async () => {},
   } = useReels({
-    initialData: initialReels,
+    initialData: initialReels || [],
     autoLoad: true,
   });
 
-  // Optimized intersection observer for infinite scroll
+  // Ensure reels is always an array
+  const reels = Array.isArray(fetchedReels) ? fetchedReels : [];
+
   const { ref: loadMoreRef, inView } = useInView({
     threshold: 0.1,
-    rootMargin: '200px', // Increased for better UX
+    rootMargin: '200px',
   });
 
-  // Preload adjacent videos
+  // Preload adjacent videos with safe checks
   const preloadAdjacentVideos = useCallback((currentIndex: number) => {
+    if (!Array.isArray(reels) || reels.length === 0) return;
+    
     const preloadIndexes = [currentIndex - 1, currentIndex + 1];
     preloadIndexes.forEach(index => {
       if (index >= 0 && index < reels.length) {
         const reel = reels[index];
-        if (reel && !loadedReels.has(reel.id)) {
+        if (reel?.id && !loadedReels.has(reel.id) && reel.thumbnailUrl) {
           const video = new Image();
           video.src = reel.thumbnailUrl;
           setLoadedReels(prev => new Set([...prev, reel.id]));
@@ -117,78 +116,30 @@ export const ReelsContainer = memo(function ReelsContainer({
     });
   }, [reels, loadedReels]);
 
-  // Enhanced scroll handling with debouncing
-  const handleScroll = useCallback(
-    debounce(() => {
-      if (!containerRef.current) return;
-      setIsScrolling(true);
-
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-
-      scrollTimeoutRef.current = window.setTimeout(() => {
-        setIsScrolling(false);
-        const container = containerRef.current;
-        if (!container) return;
-
-        const scrollTop = container.scrollTop;
-        const reelHeight = container.clientHeight;
-        const newIndex = Math.round(scrollTop / reelHeight);
-
-        if (newIndex !== currentIndex) {
-          setCurrentIndex(newIndex);
-          preloadAdjacentVideos(newIndex);
-          
-          container.scrollTo({
-            top: newIndex * reelHeight,
-            behavior: 'smooth',
-          });
-        }
-      }, 150);
-    }, 100),
-    [currentIndex, preloadAdjacentVideos]
-  );
-
-  // Memoize visible reels with caching
+  // Memoize visible reels with safe checks
   const visibleReels = useMemo(() => {
+    if (!Array.isArray(reels) || reels.length === 0) return [];
+    
     const start = Math.max(0, currentIndex - 1);
     const end = Math.min(reels.length, currentIndex + 3);
     return reels.slice(start, end).map(reel => {
+      if (!reel?.id) return null;
       const cachedData = getCachedData(reel.id);
-      if (cachedData) {
-        return { ...reel, ...cachedData };
-      }
-      return reel;
-    });
+      return cachedData ? { ...reel, ...cachedData } : reel;
+    }).filter(Boolean);
   }, [reels, currentIndex, getCachedData]);
 
-  // Load more reels when scrolling near bottom
+  // Load more reels with safe checks
   useEffect(() => {
-    if (inView && hasMore && !loading && enableInfiniteScroll) {
+    if (inView && hasMore && !loading && enableInfiniteScroll && Array.isArray(reels) && reels.length > 0) {
       loadMore();
     }
-  }, [inView, hasMore, loading, loadMore, enableInfiniteScroll]);
+  }, [inView, hasMore, loading, loadMore, enableInfiniteScroll, reels]);
 
-  // Attach scroll listener
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.addEventListener('scroll', handleScroll, { passive: true });
-
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-    };
-  }, [handleScroll]);
-
-  // Handle keyboard navigation
+  // Handle keyboard navigation with safe checks
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || !Array.isArray(reels) || reels.length === 0) return;
 
       const container = containerRef.current;
       const reelHeight = container.clientHeight;
@@ -225,10 +176,12 @@ export const ReelsContainer = memo(function ReelsContainer({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, reels.length]);
+  }, [currentIndex, reels]);
 
-  // Handle video end - auto advance to next reel
+  // Handle video end with safe checks
   const handleVideoEnd = useCallback(() => {
+    if (!Array.isArray(reels) || reels.length === 0) return;
+    
     if (currentIndex < reels.length - 1) {
       const newIndex = currentIndex + 1;
       setCurrentIndex(newIndex);
@@ -241,20 +194,24 @@ export const ReelsContainer = memo(function ReelsContainer({
         });
       }
     }
-  }, [currentIndex, reels.length]);
+  }, [currentIndex, reels]);
 
+  // Handle generate video with safe checks
   const handleGenerateVideo = async (celebrity: string) => {
+    if (!celebrity || !onGenerate) return;
+    
     try {
       const video = await onGenerate(celebrity);
-      // Add the new video to the feed
-      setVideos((prev: Video[]) => [video, ...prev]);
+      if (video) {
+        setVideos(prev => [video, ...prev]);
+      }
     } catch (error) {
       console.error('Error generating video:', error);
     }
   };
 
-  // Error state
-  if (error && reels.length === 0) {
+  // Error state with safe checks
+  if (error && (!Array.isArray(reels) || reels.length === 0)) {
     return (
       <div className="flex h-full items-center justify-center bg-black text-white">
         <div className="text-center">
@@ -272,7 +229,7 @@ export const ReelsContainer = memo(function ReelsContainer({
   }
 
   return (
-    <div className="relative h-full bg-black overflow-hidden">
+    <div className="relative h-screen bg-black overflow-hidden">
       {/* Main reels container */}
       <div
         ref={containerRef}
@@ -284,7 +241,9 @@ export const ReelsContainer = memo(function ReelsContainer({
       >
         {/* Optimized rendering - only render visible reels for performance */}
         <AnimatePresence mode="wait">
-          {reels.map((reel, index) => {
+          {Array.isArray(reels) && reels.map((reel, index) => {
+            if (!reel?.id) return null;
+            
             // Only render reels that are visible or adjacent for performance
             const isVisible = Math.abs(index - currentIndex) <= 2;
 
@@ -335,7 +294,7 @@ export const ReelsContainer = memo(function ReelsContainer({
       {/* Scroll indicators */}
       <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10">
         <div className="flex flex-col space-y-2">
-          {reels.slice(0, 5).map((_, index) => (
+          {Array.isArray(reels) && reels.slice(0, 5).map((_, index) => (
             <div
               key={index}
               className={`w-1 h-8 rounded-full transition-all duration-300 ${
@@ -345,7 +304,7 @@ export const ReelsContainer = memo(function ReelsContainer({
               }`}
             />
           ))}
-          {reels.length > 5 && (
+          {Array.isArray(reels) && reels.length > 5 && (
             <div className="text-white/60 text-xs text-center mt-2">
               {currentIndex + 1}/{reels.length}
             </div>
@@ -354,7 +313,7 @@ export const ReelsContainer = memo(function ReelsContainer({
       </div>
 
       {/* Loading overlay */}
-      {loading && reels.length === 0 && (
+      {loading && (!Array.isArray(reels) || reels.length === 0) && (
         <div className="absolute inset-0 bg-black flex items-center justify-center z-20">
           <ReelsLoading />
         </div>

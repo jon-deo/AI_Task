@@ -322,7 +322,7 @@ export function ReelItem({
           </motion.button>
 
           {/* Comments button */}
-          <motion.button
+          {/* <motion.button
             className="flex flex-col items-center space-y-1"
             whileTap={{ scale: 0.9 }}
           >
@@ -330,9 +330,9 @@ export function ReelItem({
               <MessageCircle className="w-6 h-6 text-white" />
             </div>
             <span className="text-white text-xs font-medium">
-              {formatNumber(reel._count.comments)}
+              {formatNumber(reel.commentsCount ?? 0)}
             </span>
-          </motion.button>
+          </motion.button> */}
 
           {/* More options */}
           <motion.button

@@ -1,11 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ReelsContainer } from '@/components/reels/reels-container';
 import { toast } from 'react-hot-toast';
+import Link from 'next/link';
 
 export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [initialReels, setInitialReels] = useState([]);
+
+  // Fetch initial reels on mount
+  useEffect(() => {
+    fetch('/api/reels')
+      .then(res => res.json())
+      .then(data => {
+        // Support both data.data.items and data.data.reels for compatibility
+        const reels = data?.data?.items || data?.data?.reels || data?.reels || [];
+        setInitialReels(reels);
+      })
+      .catch(error => {
+        console.error('Error fetching reels:', error);
+        toast.error('Failed to load reels');
+      });
+  }, []);
 
   const handleGenerate = async (celebrity: string) => {
     try {
@@ -35,13 +52,14 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-black">
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold text-white mb-8">
-          Sports Celebrity Reels
-        </h1>
-        <ReelsContainer onGenerate={handleGenerate} isGenerating={isGenerating} />
-      </div>
+    <main className="min-h-screen">
+      <ReelsContainer
+        initialReels={initialReels}
+        onGenerate={handleGenerate}
+        isGenerating={isGenerating}
+        autoPlay={true}
+        enableInfiniteScroll={true}
+      />
     </main>
   );
 }
