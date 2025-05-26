@@ -138,22 +138,19 @@ export class AIScriptGenerationService {
     for (let attempt = 1; attempt <= options.maxRetries; attempt++) {
       try {
         const response = await openai.chat.completions.create({
-          model: options.model,
+          model: 'gpt-3.5-turbo',
           messages: [
             {
               role: 'system',
-              content: `You are an expert sports content creator specializing in engaging, factual sports reels. Create compelling scripts that are exactly ${duration} seconds when spoken at 150 words per minute (approximately ${targetWords} words).`,
+              content: `You are a professional sports content creator. Create a ${duration}-second script about ${celebrity.name}, a ${celebrity.sport} player. Focus on their achievements and impact on the sport.`,
             },
             {
               role: 'user',
-              content: prompt,
+              content: `Generate a script about ${celebrity.name} (${celebrity.nationality}, ${celebrity.sport}). Key points to include: ${celebrity.achievements.join(', ')}. Biography: ${celebrity.biography}`,
             },
           ],
-          max_tokens: AI_CONFIG.GENERATION.MAX_TOKENS,
-          temperature: options.temperature,
-          top_p: AI_CONFIG.GENERATION.TOP_P,
-          frequency_penalty: AI_CONFIG.GENERATION.FREQUENCY_PENALTY,
-          presence_penalty: AI_CONFIG.GENERATION.PRESENCE_PENALTY,
+          temperature: 0.7,
+          max_tokens: 500,
         });
 
         const script = response.choices[0]?.message?.content?.trim();

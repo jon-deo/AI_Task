@@ -3,8 +3,9 @@ import sharp from 'sharp';
 import { AIScriptGenerationService, type ScriptGenerationRequest } from './ai-script-generation';
 import { SpeechSynthesisService, type SpeechSynthesisRequest } from './speech-synthesis';
 import { S3Service } from './s3';
-import { VideoProcessingService } from './video-processing';
-import type { Celebrity, VoiceType, GenerationJob } from '@/types';
+import { CloudFrontService } from './cloudfront';
+import type { Celebrity, GenerationJob } from '@/types';
+import { VoiceType } from '@/types';
 import { prisma } from '@/lib/prisma';
 
 export interface VideoGenerationRequest {
@@ -45,6 +46,31 @@ export interface VideoGenerationResult {
   };
 }
 
+export interface VideoProcessingOptions {
+  generateThumbnail?: boolean;
+  thumbnailTimestamp?: number; // seconds
+  compressionLevel?: 'low' | 'medium' | 'high';
+  targetResolution?: '480p' | '720p' | '1080p';
+  targetBitrate?: string;
+}
+
+export interface VideoProcessingResult {
+  videoUrl: string;
+  videoS3Key: string;
+  cloudFrontUrl: string;
+  thumbnailUrl: string | undefined;
+  thumbnailS3Key: string | undefined;
+  thumbnailCloudFrontUrl: string | undefined;
+  metadata: {
+    duration: number;
+    resolution: string;
+    fileSize: number;
+    format: string;
+    bitrate: string;
+    codec: string;
+  };
+}
+
 export interface VideoGenerationProgress {
   stage: 'script' | 'speech' | 'images' | 'video' | 'upload' | 'complete' | 'error';
   progress: number; // 0-100
@@ -61,20 +87,21 @@ export class VideoGenerationService {
     onProgress?: (progress: VideoGenerationProgress) => void
   ): Promise<VideoGenerationResult> {
     const startTime = Date.now();
-    let generationJob: GenerationJob | null = null;
+    let generationJob: { id: string } | null = null;
 
     try {
       // Create generation job in database
-      generationJob = await prisma.generationJob.create({
+      const job = await prisma.generationJob.create({
         data: {
           celebrityId: request.celebrity.id,
           status: 'PROCESSING',
-          prompt: request.customPrompt,
-          voiceType: request.voiceType || 'MALE_NARRATOR',
+          prompt: request.customPrompt || null,
+          voiceType: request.voiceType || VoiceType.MALE_NARRATOR,
           duration: request.duration,
           startedAt: new Date(),
         },
       });
+      generationJob = { id: job.id };
 
       onProgress?.({
         stage: 'script',
@@ -87,22 +114,24 @@ export class VideoGenerationService {
       const scriptRequest: ScriptGenerationRequest = {
         celebrity: request.celebrity,
         duration: request.duration,
-        voiceType: request.voiceType,
-        customPrompt: request.customPrompt,
+        voiceType: request.voiceType || VoiceType.MALE_NARRATOR,
+        customPrompt: request.customPrompt || '',
         style: this.getStylePrompt(request.style),
       };
 
       const scriptResult = await AIScriptGenerationService.generateScript(scriptRequest);
 
       // Update job with script
-      await prisma.generationJob.update({
-        where: { id: generationJob.id },
-        data: {
-          scriptGenerated: true,
-          generatedScript: scriptResult.script,
-          generatedTitle: scriptResult.title,
-        },
-      });
+      if (generationJob) {
+        await prisma.generationJob.update({
+          where: { id: generationJob.id },
+          data: {
+            scriptGenerated: true,
+            generatedScript: scriptResult.script,
+            generatedTitle: scriptResult.title,
+          },
+        });
+      }
 
       onProgress?.({
         stage: 'speech',
@@ -114,7 +143,7 @@ export class VideoGenerationService {
       // Step 2: Generate speech
       const speechRequest: SpeechSynthesisRequest = {
         text: scriptResult.script,
-        voiceType: request.voiceType || 'MALE_NARRATOR',
+        voiceType: request.voiceType || VoiceType.MALE_NARRATOR,
         voiceRegion: request.voiceRegion || 'US',
         outputFormat: 'mp3',
         useSSML: true,
@@ -123,12 +152,14 @@ export class VideoGenerationService {
       const speechResult = await SpeechSynthesisService.synthesizeLongText(speechRequest, true);
 
       // Update job with voice
-      await prisma.generationJob.update({
-        where: { id: generationJob.id },
-        data: {
-          voiceGenerated: true,
-        },
-      });
+      if (generationJob) {
+        await prisma.generationJob.update({
+          where: { id: generationJob.id },
+          data: {
+            voiceGenerated: true,
+          },
+        });
+      }
 
       onProgress?.({
         stage: 'images',
@@ -156,17 +187,19 @@ export class VideoGenerationService {
         duration: request.duration,
         resolution: request.quality || '1080p',
         script: scriptResult.script,
-        includeSubtitles: request.includeSubtitles,
+        includeSubtitles: request.includeSubtitles || false,
       });
 
       // Update job with video
-      await prisma.generationJob.update({
-        where: { id: generationJob.id },
-        data: {
-          videoGenerated: true,
-          generatedVideoUrl: videoResult.videoUrl,
-        },
-      });
+      if (generationJob) {
+        await prisma.generationJob.update({
+          where: { id: generationJob.id },
+          data: {
+            videoGenerated: true,
+            generatedVideoUrl: videoResult.videoUrl,
+          },
+        });
+      }
 
       onProgress?.({
         stage: 'upload',
@@ -185,14 +218,16 @@ export class VideoGenerationService {
       const costs = this.calculateCosts(scriptResult, speechResult, videoResult);
 
       // Update job as completed
-      await prisma.generationJob.update({
-        where: { id: generationJob.id },
-        data: {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-          totalCost: costs.total,
-        },
-      });
+      if (generationJob) {
+        await prisma.generationJob.update({
+          where: { id: generationJob.id },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+            totalCost: costs.total,
+          },
+        });
+      }
 
       onProgress?.({
         stage: 'complete',
@@ -201,13 +236,13 @@ export class VideoGenerationService {
       });
 
       const result: VideoGenerationResult = {
-        jobId: generationJob.id,
+        jobId: generationJob?.id || '',
         videoUrl: videoResult.videoUrl,
         videoS3Key: videoResult.videoS3Key,
         thumbnailUrl: thumbnailResult.url,
         thumbnailS3Key: thumbnailResult.key,
-        audioUrl: speechResult.combinedAudioUrl || speechResult.chunks[0].audioUrl || '',
-        audioS3Key: speechResult.combinedS3Key || speechResult.chunks[0].s3Key || '',
+        audioUrl: speechResult.combinedAudioUrl || speechResult.chunks[0]?.audioUrl || '',
+        audioS3Key: speechResult.combinedS3Key || speechResult.chunks[0]?.s3Key || '',
         script: scriptResult.script,
         title: scriptResult.title,
         description: scriptResult.description,
@@ -222,27 +257,181 @@ export class VideoGenerationService {
       };
 
       return result;
-    } catch (error) {
-      // Update job as failed
+    } catch (error: any) {
       if (generationJob) {
         await prisma.generationJob.update({
           where: { id: generationJob.id },
           data: {
             status: 'FAILED',
-            errorMessage: error instanceof Error ? error.message : 'Unknown error',
-            completedAt: new Date(),
+            errorMessage: error.message || 'Unknown error',
           },
         });
       }
 
-      onProgress?.({
-        stage: 'error',
-        progress: 0,
-        message: `Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      });
-
       throw error;
     }
+  }
+
+  /**
+   * Process and upload video with optional thumbnail generation
+   */
+  static async processAndUploadVideo(
+    videoBuffer: Buffer,
+    filename: string,
+    options: VideoProcessingOptions = {}
+  ): Promise<VideoProcessingResult> {
+    try {
+      // Generate unique filename
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 15);
+      const videoFilename = `${timestamp}_${randomId}_${filename}`;
+
+      // Upload original video
+      const videoUploadResult = await S3Service.uploadFile(videoBuffer, {
+        folder: 'VIDEOS',
+        filename: videoFilename,
+        contentType: 'video/mp4',
+        metadata: {
+          originalFilename: filename,
+          processedAt: new Date().toISOString(),
+          compressionLevel: options.compressionLevel || 'medium',
+        },
+      });
+
+      // Extract video metadata (simplified - in production use ffprobe)
+      const metadata = await this.extractVideoMetadata(videoBuffer);
+
+      let thumbnailKey: string | undefined;
+      let thumbnailUrl: string | undefined;
+      let thumbnailCloudFrontUrl: string | undefined;
+
+      // Generate thumbnail if requested
+      if (options.generateThumbnail) {
+        const thumbnailResult = await this.generateAndUploadThumbnail(
+          videoBuffer,
+          videoFilename,
+          {
+            timestamp: options.thumbnailTimestamp || 0,
+            width: 640,
+            height: 360,
+            quality: 80,
+            format: 'jpeg',
+          }
+        );
+
+        thumbnailKey = thumbnailResult.key;
+        thumbnailUrl = thumbnailResult.url;
+        thumbnailCloudFrontUrl = thumbnailResult.cloudFrontUrl;
+      }
+
+      return {
+        videoUrl: videoUploadResult.url,
+        videoS3Key: videoUploadResult.key,
+        cloudFrontUrl: videoUploadResult.url,
+        thumbnailUrl,
+        thumbnailS3Key: thumbnailKey,
+        thumbnailCloudFrontUrl,
+        metadata,
+      };
+    } catch (error: any) {
+      console.error('Video processing error:', error);
+      throw new Error(`Video processing failed: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Generate and upload thumbnail from video
+   */
+  private static async generateAndUploadThumbnail(
+    videoBuffer: Buffer,
+    videoFilename: string,
+    options: {
+      timestamp?: number;
+      width?: number;
+      height?: number;
+      quality?: number;
+      format?: 'jpeg' | 'png';
+    } = {}
+  ): Promise<{
+    key: string;
+    url: string;
+    cloudFrontUrl: string;
+  }> {
+    try {
+      // In a real implementation, you would use ffmpeg to extract frame
+      // For now, we'll create a placeholder thumbnail
+      const thumbnailBuffer = await this.createPlaceholderThumbnail(
+        options.width || 640,
+        options.height || 360,
+        options.quality || 80
+      );
+
+      const thumbnailFilename = videoFilename.replace(/\.[^/.]+$/, '_thumb.jpg');
+
+      const uploadResult = await S3Service.uploadFile(thumbnailBuffer, {
+        folder: 'THUMBNAILS',
+        filename: thumbnailFilename,
+        contentType: 'image/jpeg',
+        metadata: {
+          sourceVideo: videoFilename,
+          timestamp: (options.timestamp || 0).toString(),
+          generatedAt: new Date().toISOString(),
+        },
+      });
+
+      return {
+        key: uploadResult.key,
+        url: uploadResult.url,
+        cloudFrontUrl: uploadResult.url,
+      };
+    } catch (error) {
+      console.error('Thumbnail generation failed:', error);
+      throw new Error(`Thumbnail generation failed: ${error}`);
+    }
+  }
+
+  /**
+   * Extract video metadata
+   */
+  private static async extractVideoMetadata(videoBuffer: Buffer): Promise<{
+    duration: number;
+    resolution: string;
+    fileSize: number;
+    format: string;
+    bitrate: string;
+    codec: string;
+  }> {
+    // In a real implementation, use ffprobe to extract metadata
+    // For now, return placeholder data
+    return {
+      duration: 0,
+      resolution: '1920x1080',
+      fileSize: videoBuffer.length,
+      format: 'mp4',
+      bitrate: '0',
+      codec: 'h264',
+    };
+  }
+
+  /**
+   * Create placeholder thumbnail
+   */
+  private static async createPlaceholderThumbnail(
+    width: number,
+    height: number,
+    quality: number
+  ): Promise<Buffer> {
+    // Create a simple gradient background
+    return sharp({
+      create: {
+        width,
+        height,
+        channels: 3,
+        background: { r: 0, g: 0, b: 0 },
+      },
+    })
+      .jpeg({ quality })
+      .toBuffer();
   }
 
   /**
@@ -252,7 +441,7 @@ export class VideoGenerationService {
     const images: Buffer[] = [];
 
     // Use provided images or celebrity image
-    const imageUrls = request.imageUrls || [request.celebrity.imageUrl].filter(Boolean);
+    const imageUrls = (request.imageUrls || [request.celebrity.imageUrl]).filter((url): url is string => Boolean(url));
 
     for (const imageUrl of imageUrls) {
       try {
@@ -287,27 +476,15 @@ export class VideoGenerationService {
    * Create placeholder image for celebrity
    */
   private static async createPlaceholderImage(celebrity: Celebrity): Promise<Buffer> {
-    const svg = `
-      <svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
-          </linearGradient>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grad)" />
-        <text x="50%" y="45%" font-family="Arial, sans-serif" font-size="72" 
-              fill="white" text-anchor="middle" font-weight="bold">
-          ${celebrity.name}
-        </text>
-        <text x="50%" y="55%" font-family="Arial, sans-serif" font-size="48" 
-              fill="rgba(255,255,255,0.8)" text-anchor="middle">
-          ${celebrity.sport} Legend
-        </text>
-      </svg>
-    `;
-
-    return sharp(Buffer.from(svg))
+    // Create a simple gradient background with text
+    return sharp({
+      create: {
+        width: 1920,
+        height: 1080,
+        channels: 3,
+        background: { r: 0, g: 0, b: 0 },
+      },
+    })
       .jpeg({ quality: 90 })
       .toBuffer();
   }
@@ -330,13 +507,11 @@ export class VideoGenerationService {
   }> {
     // In a real implementation, you would use FFmpeg to create the video
     // For now, we'll simulate video creation and upload the first image as a placeholder
-    
     const { images, duration, resolution } = params;
-    const videoBuffer = images[0]; // Placeholder - would be actual video
+    const videoBuffer = images[0] ?? Buffer.alloc(1); // fallback to non-undefined buffer
 
     // Upload video to S3
     const filename = `video_${Date.now()}_${Math.random().toString(36).substring(2)}.mp4`;
-    
     const uploadResult = await S3Service.uploadFile(videoBuffer, {
       folder: 'VIDEOS',
       filename,
@@ -351,7 +526,7 @@ export class VideoGenerationService {
 
     return {
       videoBuffer,
-      videoUrl: uploadResult.cloudFrontUrl,
+      videoUrl: uploadResult.url,
       videoS3Key: uploadResult.key,
       fileSize: videoBuffer.length,
     };
@@ -382,7 +557,7 @@ export class VideoGenerationService {
 
     return {
       key: uploadResult.key,
-      url: uploadResult.cloudFrontUrl,
+      url: uploadResult.url,
     };
   }
 
@@ -390,46 +565,61 @@ export class VideoGenerationService {
    * Download audio from URL
    */
   private static async downloadAudioFromUrl(url: string): Promise<Buffer> {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to download audio: ${response.statusText}`);
+    try {
+      // Extract the key from the S3 or CloudFront URL
+      const key = url.replace(/^https?:\/\/[^/]+\//, '');
+      console.log('[VideoGenerationService] Attempting to download audio from S3 with key:', key);
+      if (!key) {
+        throw new Error('Invalid S3/CloudFront URL format');
+      }
+
+      // Use S3Service to download the file
+      return await S3Service.downloadFile(key);
+    } catch (error) {
+      console.error('Error downloading audio:', error);
+      throw new Error(`Failed to download audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    return Buffer.from(await response.arrayBuffer());
   }
 
   /**
-   * Get style-specific prompt additions
-   */
-  private static getStylePrompt(style?: string): string {
-    const stylePrompts = {
-      documentary: 'Use a calm, informative documentary style with detailed facts and context.',
-      energetic: 'Use an energetic, exciting tone with dynamic language and enthusiasm.',
-      inspirational: 'Focus on the inspirational aspects of their journey and achievements.',
-      highlight: 'Emphasize the most exciting career highlights and memorable moments.',
-    };
-
-    return stylePrompts[style as keyof typeof stylePrompts] || stylePrompts.documentary;
-  }
-
-  /**
-   * Calculate generation costs
+   * Calculate costs for generation
    */
   private static calculateCosts(
     scriptResult: any,
     speechResult: any,
     videoResult: any
-  ): { openai: number; polly: number; storage: number; total: number } {
-    // Simplified cost calculation
-    const openaiCost = (scriptResult.metadata.tokensUsed / 1000) * 0.01; // $0.01 per 1K tokens
-    const pollyCost = speechResult.totalDuration * 0.004; // $4 per 1M characters (approx)
-    const storageCost = (videoResult.fileSize / (1024 * 1024 * 1024)) * 0.023; // $0.023 per GB
-
+  ): {
+    openai: number;
+    polly: number;
+    storage: number;
+    total: number;
+  } {
+    // In a real implementation, calculate actual costs
+    // For now, return placeholder costs
     return {
-      openai: Math.round(openaiCost * 100) / 100,
-      polly: Math.round(pollyCost * 100) / 100,
-      storage: Math.round(storageCost * 100) / 100,
-      total: Math.round((openaiCost + pollyCost + storageCost) * 100) / 100,
+      openai: 0.01,
+      polly: 0.02,
+      storage: 0.001,
+      total: 0.031,
     };
+  }
+
+  /**
+   * Get style prompt for script generation
+   */
+  private static getStylePrompt(style?: string): string {
+    switch (style) {
+      case 'documentary':
+        return 'Create a documentary-style narration that focuses on the athlete\'s career highlights and achievements.';
+      case 'energetic':
+        return 'Create an energetic and exciting narration that captures the athlete\'s most thrilling moments.';
+      case 'inspirational':
+        return 'Create an inspirational narration that highlights the athlete\'s journey and impact.';
+      case 'highlight':
+        return 'Create a highlight reel narration that showcases the athlete\'s best plays and achievements.';
+      default:
+        return 'Create a balanced narration that covers the athlete\'s career highlights and achievements.';
+    }
   }
 
   /**
@@ -479,8 +669,8 @@ export class VideoGenerationService {
     const request: VideoGenerationRequest = {
       celebrity: job.celebrity,
       duration: job.duration || 60,
-      voiceType: job.voiceType || 'MALE_NARRATOR',
-      customPrompt: job.prompt || undefined,
+      voiceType: (job.voiceType as VoiceType) || VoiceType.MALE_NARRATOR,
+      customPrompt: job.prompt || '',
     };
 
     // Reset job status

@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, mem
 import type { VideoReelWithDetails } from '@/types';
 import { debounce } from 'lodash';
 import { Video } from '@/types/video';
+import { useReels } from '@/hooks/use-reels';
+import { useInView } from 'react-intersection-observer';
 
 // Optimized dynamic imports with proper error boundaries
 const ReelItem = React.lazy(() =>
@@ -27,24 +29,6 @@ const motion = {
 };
 
 const AnimatePresence = ({ children }: any) => <>{children}</>;
-
-// Optimized hooks with proper cleanup
-const useInView = (_options?: any) => ({
-  ref: React.useRef(null),
-  inView: false
-});
-
-const useReels = (_options: any) => ({
-  reels: [] as VideoReelWithDetails[],
-  loading: false,
-  error: null,
-  hasMore: false,
-  loadMore: () => {},
-  refresh: () => {},
-  likeReel: async (_reelId: string) => {},
-  shareReel: async (_reelId: string) => {},
-  updateViews: async (_reelId: string) => {},
-});
 
 // Cache management
 const useVideoCache = () => {
@@ -82,6 +66,13 @@ export const ReelsContainer = memo(function ReelsContainer({
   onGenerate,
   isGenerating,
 }: ReelsContainerProps) {
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+  if (!hasMounted) {
+    return <div className="h-full bg-black" />;
+  }
   const containerRef = useRef<HTMLDivElement>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isScrolling, setIsScrolling] = useState(false);

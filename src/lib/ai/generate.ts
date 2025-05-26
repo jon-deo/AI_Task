@@ -1,6 +1,10 @@
 import OpenAI from 'openai';
 import { PollyClient, StartSpeechSynthesisTaskCommand } from '@aws-sdk/client-polly';
 import { s3Client } from '../aws/config';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 if (!process.env.AWS_REGION) {
   throw new Error('AWS_REGION is not defined');
@@ -19,19 +23,16 @@ const pollyClient = new PollyClient({
 });
 
 export async function generateCelebrityScript(celebrity: string) {
-  const prompt = `Create a short, engaging script about ${celebrity}'s sports career highlights. Focus on their most memorable moments, achievements, and impact on the sport. Keep it concise and engaging, suitable for a 30-second video.`;
+  // For testing without OpenAI API
+  const testScripts = {
+    'Michael Jordan': 'Michael Jordan, the greatest basketball player of all time. Six NBA championships, five MVP awards, and countless unforgettable moments. His Airness soared above the competition, redefining what was possible on the court.',
+    'Lionel Messi': 'Lionel Messi, the Argentine maestro who revolutionized football. Eight Ballon d\'Or awards, World Cup glory, and mesmerizing skills that left defenders in awe. A true legend of the beautiful game.',
+    'Serena Williams': 'Serena Williams, the queen of tennis. 23 Grand Slam singles titles, Olympic gold medals, and a career that inspired generations. Her power, grace, and determination made her one of the greatest athletes ever.'
+  };
 
-  const completion = await openai.chat.completions.create({
-    messages: [{ role: "user", content: prompt }],
-    model: "gpt-4",
-    max_tokens: 150,
-  });
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error('Failed to generate script content');
-  }
-  return content;
+  // Return test script if available, otherwise a generic one
+  return testScripts[celebrity as keyof typeof testScripts] || 
+    `${celebrity} is one of the greatest athletes in their sport. Their dedication, skill, and achievements have inspired millions around the world.`;
 }
 
 export async function generateSpeech(text: string) {
@@ -39,7 +40,7 @@ export async function generateSpeech(text: string) {
     Text: text,
     OutputFormat: 'mp3',
     VoiceId: 'Matthew',
-    OutputS3BucketName: process.env.AWS_S3_BUCKET,
+    OutputS3BucketName: process.env.AWS_S3_BUCKET_NAME,
     OutputS3KeyPrefix: 'speech/',
   });
 

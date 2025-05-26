@@ -1,36 +1,9 @@
-import { S3Client, S3ClientConfig } from '@aws-sdk/client-s3';
-
-import { config } from '../config';
-
-// S3 Client Configuration
-const s3Config: S3ClientConfig = {
-  region: config.aws.region,
-  credentials: {
-    accessKeyId: config.aws.accessKeyId,
-    secretAccessKey: config.aws.secretAccessKey,
-  },
-  // Performance optimizations
-  maxAttempts: 3,
-  retryMode: 'adaptive',
-  requestHandler: {
-    requestTimeout: 30000, // 30 seconds
-    httpsAgent: {
-      maxSockets: 50,
-      keepAlive: true,
-    },
-  },
-};
-
-// Initialize S3 client
-export const s3Client = new S3Client(s3Config);
-
-// CloudFront client will be initialized when needed
-export let cloudFrontClient: any = null;
+import { S3Client, S3ClientConfig, HeadBucketCommand } from '@aws-sdk/client-s3';
 
 // S3 Bucket Configuration
 export const S3_CONFIG = {
-  BUCKET_NAME: config.aws.s3Bucket,
-  REGION: config.aws.region,
+  BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME || 'essentially-sports-task',
+  REGION: process.env.AWS_REGION || 'eu-north-1',
 
   // Folder structure
   FOLDERS: {
@@ -72,15 +45,63 @@ export const S3_CONFIG = {
     DOMAIN: process.env.AWS_CLOUDFRONT_DOMAIN || undefined,
     CACHE_BEHAVIORS: {
       VIDEOS: {
-        cachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad', // Managed-CachingOptimized
-        originRequestPolicyId: '88a5eaf4-2fd4-4709-b370-b4c650ea3fcf', // Managed-CORS-S3Origin
+        cachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+        originRequestPolicyId: '88a5eaf4-2fd4-4709-b370-b4c650ea3fcf',
       },
       IMAGES: {
-        cachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6', // Managed-CachingOptimizedForUncompressedObjects
+        cachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
       },
     },
   },
 } as const;
+
+// S3 Client Configuration
+const s3Config: S3ClientConfig = {
+  region: S3_CONFIG.REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+  },
+  // Performance optimizations
+  maxAttempts: 3,
+  retryMode: 'adaptive',
+  requestHandler: {
+    requestTimeout: 30000, // 30 seconds
+    httpsAgent: {
+      maxSockets: 50,
+      keepAlive: true,
+    },
+  },
+};
+
+// Initialize S3 client
+let s3Client: S3Client | null = null;
+
+try {
+  s3Client = new S3Client(s3Config);
+  
+  // Verify S3 access
+  const verifyAccess = async () => {
+    try {
+      const command = new HeadBucketCommand({
+        Bucket: S3_CONFIG.BUCKET_NAME,
+      });
+      await s3Client?.send(command);
+      console.log('S3 access verified successfully');
+    } catch (error) {
+      console.error('S3 access verification failed:', error);
+      throw new Error('Failed to verify S3 access. Please check your AWS credentials and bucket permissions.');
+    }
+  };
+  
+  verifyAccess();
+} catch (error) {
+  console.error('Failed to initialize S3 client:', error);
+  throw new Error('Failed to initialize S3 client. Please check your AWS configuration.');
+}
+
+// CloudFront client will be initialized when needed
+export let cloudFrontClient: any = null;
 
 // Utility functions for AWS configuration
 export const getS3Url = (key: string): string => {
@@ -229,35 +250,23 @@ export const checkAWSHealth = async (): Promise<{
   errors: string[];
 }> => {
   const errors: string[] = [];
-  let s3Healthy = false;
-  let cloudfrontHealthy = false;
 
   try {
-    // Test S3 connection
-    const { HeadBucketCommand } = await import('@aws-sdk/client-s3');
-    await s3Client.send(new HeadBucketCommand({
+    // Check S3 access
+    const command = new HeadBucketCommand({
       Bucket: S3_CONFIG.BUCKET_NAME,
-    }));
-    s3Healthy = true;
+    });
+    await s3Client?.send(command);
   } catch (error) {
-    errors.push(`S3 health check failed: ${error}`);
-  }
-
-  try {
-    // Test CloudFront (if configured)
-    if (S3_CONFIG.CLOUDFRONT.DOMAIN) {
-      // CloudFront health check is optional - skip for now
-      cloudfrontHealthy = true;
-    } else {
-      cloudfrontHealthy = true; // No CloudFront configured
-    }
-  } catch (error) {
-    errors.push(`CloudFront health check failed: ${error}`);
+    errors.push(`S3 Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 
   return {
-    s3: s3Healthy,
-    cloudfront: cloudfrontHealthy,
+    s3: errors.length === 0,
+    cloudfront: !!S3_CONFIG.CLOUDFRONT.DOMAIN,
     errors,
   };
 };
+
+// Export the S3 client
+export { s3Client };

@@ -1,160 +1,86 @@
 import { NextRequest, NextResponse } from 'next/server';
-
+import { prisma } from '@/lib/prisma';
 import { checkOpenAIHealth } from '@/lib/openai-config';
 import { checkPollyHealth } from '@/lib/polly-config';
 import { AIScriptGenerationService } from '@/services/ai-script-generation';
 import { SpeechSynthesisService } from '@/services/speech-synthesis';
+import { VideoGenerationService } from '@/services/video-generation';
+import { VoiceId, OutputFormat } from '@aws-sdk/client-polly';
+import { VoiceType } from '@/types';
+import type { Celebrity } from '@/types';
+
+type ServiceStatus = 'healthy' | 'unhealthy' | 'unknown' | 'degraded';
 
 /**
  * GET /api/health/ai - Check AI services health
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const startTime = Date.now();
-
-    // Run health checks in parallel
-    const [
-      openaiHealth,
-      pollyHealth,
-      scriptTest,
-      speechTest,
-    ] = await Promise.allSettled([
-      checkOpenAIHealth(),
-      checkPollyHealth(),
-      testScriptGeneration(),
-      testSpeechSynthesis(),
-    ]);
-
-    const endTime = Date.now();
-    const responseTime = endTime - startTime;
-
-    // Process results
     const results = {
-      overall: 'healthy' as 'healthy' | 'degraded' | 'unhealthy',
-      responseTime,
-      timestamp: new Date().toISOString(),
-      services: {
-        openai: {
-          status: 'unknown' as 'healthy' | 'degraded' | 'unhealthy',
-          details: {} as any,
-        },
-        polly: {
-          status: 'unknown' as 'healthy' | 'degraded' | 'unhealthy',
-          details: {} as any,
-        },
-        scriptGeneration: {
-          status: 'unknown' as 'healthy' | 'degraded' | 'unhealthy',
-          details: {} as any,
-        },
-        speechSynthesis: {
-          status: 'unknown' as 'healthy' | 'degraded' | 'unhealthy',
-          details: {} as any,
-        },
-      },
+      openai: false,
+      polly: false,
+      video: false,
       errors: [] as string[],
     };
 
-    // Process OpenAI health check
-    if (openaiHealth.status === 'fulfilled') {
-      const health = openaiHealth.value;
-      results.services.openai.status = health.healthy ? 'healthy' : 'unhealthy';
-      results.services.openai.details = {
-        responseTime: health.responseTime,
-        model: health.model,
-      };
-      
-      if (health.errors.length > 0) {
-        results.errors.push(...health.errors);
-      }
-    } else {
-      results.services.openai.status = 'unhealthy';
-      results.errors.push(`OpenAI health check failed: ${openaiHealth.reason}`);
+    // Get or create a test celebrity
+    const celebrity = await ensureTestCelebrity();
+
+    // Test OpenAI (Script Generation)
+    try {
+      const testScript = await AIScriptGenerationService.generateScript({
+        celebrity,
+        duration: 30,
+        voiceType: VoiceType.MALE_NARRATOR,
+      });
+      results.openai = true;
+    } catch (error: any) {
+      results.errors.push(`OpenAI Error: ${error.message}`);
     }
 
-    // Process Polly health check
-    if (pollyHealth.status === 'fulfilled') {
-      const health = pollyHealth.value;
-      results.services.polly.status = health.healthy ? 'healthy' : 'unhealthy';
-      results.services.polly.details = {
-        responseTime: health.responseTime,
-        availableVoices: health.availableVoices,
-      };
-      
-      if (health.errors.length > 0) {
-        results.errors.push(...health.errors);
-      }
-    } else {
-      results.services.polly.status = 'unhealthy';
-      results.errors.push(`Polly health check failed: ${pollyHealth.reason}`);
+    // Test AWS Polly (Voice Generation)
+    try {
+      const testVoice = await SpeechSynthesisService.synthesizeSpeech({
+        text: 'This is a test of the voice synthesis service.',
+        voiceType: VoiceType.MALE_NARRATOR,
+        outputFormat: 'mp3',
+      });
+      results.polly = true;
+    } catch (error: any) {
+      results.errors.push(`Polly Error: ${error.message}`);
     }
 
-    // Process script generation test
-    if (scriptTest.status === 'fulfilled') {
-      const test = scriptTest.value;
-      results.services.scriptGeneration.status = test.success ? 'healthy' : 'degraded';
-      results.services.scriptGeneration.details = {
-        testDuration: test.duration,
-        wordCount: test.wordCount,
-        tokensUsed: test.tokensUsed,
-      };
-      
-      if (!test.success) {
-        results.errors.push(test.error || 'Script generation test failed');
-      }
-    } else {
-      results.services.scriptGeneration.status = 'unhealthy';
-      results.errors.push(`Script generation test failed: ${scriptTest.reason}`);
+    // Test Video Generation
+    try {
+      const testVideo = await VideoGenerationService.generateVideo({
+        celebrity,
+        duration: 30,
+      });
+      results.video = true;
+    } catch (error: any) {
+      results.errors.push(`Video Generation Error: ${error.message}`);
     }
 
-    // Process speech synthesis test
-    if (speechTest.status === 'fulfilled') {
-      const test = speechTest.value;
-      results.services.speechSynthesis.status = test.success ? 'healthy' : 'degraded';
-      results.services.speechSynthesis.details = {
-        testDuration: test.duration,
-        audioSize: test.audioSize,
-        voiceId: test.voiceId,
-      };
-      
-      if (!test.success) {
-        results.errors.push(test.error || 'Speech synthesis test failed');
-      }
-    } else {
-      results.services.speechSynthesis.status = 'unhealthy';
-      results.errors.push(`Speech synthesis test failed: ${speechTest.reason}`);
-    }
-
-    // Determine overall health
-    const serviceStatuses = Object.values(results.services).map(s => s.status);
-    
-    if (serviceStatuses.every(status => status === 'healthy')) {
-      results.overall = 'healthy';
-    } else if (serviceStatuses.some(status => status === 'unhealthy')) {
-      results.overall = 'unhealthy';
-    } else {
-      results.overall = 'degraded';
-    }
-
-    // Return appropriate status code
-    const statusCode = results.overall === 'healthy' ? 200 : 
-                      results.overall === 'degraded' ? 200 : 503;
-
-    return NextResponse.json(results, { status: statusCode });
-  } catch (error) {
-    console.error('AI health check error:', error);
-    
+    // Return health status
     return NextResponse.json({
-      overall: 'unhealthy',
-      responseTime: 0,
-      timestamp: new Date().toISOString(),
+      status: results.errors.length === 0 ? 'healthy' : 'degraded',
       services: {
-        openai: { status: 'unhealthy', details: {} },
-        polly: { status: 'unhealthy', details: {} },
-        scriptGeneration: { status: 'unhealthy', details: {} },
-        speechSynthesis: { status: 'unhealthy', details: {} },
+        openai: results.openai ? 'healthy' : 'unhealthy',
+        polly: results.polly ? 'healthy' : 'unhealthy',
+        video: results.video ? 'healthy' : 'unhealthy',
       },
-      errors: [`Health check failed: ${error}`],
-    }, { status: 503 });
+      errors: results.errors,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        status: 'unhealthy',
+        error: error.message || 'Unknown error',
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 }
+    );
   }
 }
 
@@ -202,7 +128,7 @@ async function testScriptGeneration(): Promise<{
     const result = await AIScriptGenerationService.generateScript({
       celebrity: testCelebrity,
       duration: 30,
-      voiceType: 'MALE_NARRATOR',
+      voiceType: VoiceType.MALE_NARRATOR,
     }, {
       model: 'gpt-3.5-turbo', // Use faster model for health check
       maxRetries: 1,
@@ -240,7 +166,7 @@ async function testSpeechSynthesis(): Promise<{
     
     const result = await SpeechSynthesisService.synthesizeSpeech({
       text: testText,
-      voiceType: 'MALE_NARRATOR',
+      voiceType: VoiceType.MALE_NARRATOR,
       voiceRegion: 'US',
       outputFormat: 'mp3',
       useSSML: false,
@@ -374,4 +300,32 @@ export async function POST(request: NextRequest) {
       error: String(error),
     }, { status: 500 });
   }
+}
+
+async function ensureTestCelebrity() {
+  // Check if we already have a test celebrity
+  let celebrity = await prisma.celebrity.findFirst({
+    where: { name: 'Test Athlete' },
+  });
+
+  if (!celebrity) {
+    // Create a test celebrity
+    celebrity = await prisma.celebrity.create({
+      data: {
+        name: 'Test Athlete',
+        slug: 'test-athlete',
+        sport: 'FOOTBALL',
+        imageUrl: 'https://example.com/test.jpg',
+        biography: 'A test athlete for health check purposes.',
+        achievements: ['Test Achievement'],
+        nationality: 'USA',
+        isActive: true,
+        totalViews: BigInt(0),
+        totalLikes: BigInt(0),
+        totalShares: BigInt(0),
+      },
+    });
+  }
+
+  return celebrity;
 }

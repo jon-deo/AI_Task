@@ -70,8 +70,8 @@ export async function GET(request: NextRequest) {
     const queryParams = {
       page: searchParams.get('page') ? parseInt(searchParams.get('page')!) : undefined,
       limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined,
-      sort: searchParams.get('sort') as any,
-      order: searchParams.get('order') as any,
+      sort: (searchParams.get('sort') as any) || 'createdAt',
+      order: (searchParams.get('order') as any) || 'desc',
       search: searchParams.get('search') || undefined,
       celebrityId: searchParams.get('celebrityId') || undefined,
       sport: searchParams.get('sport') || undefined,
@@ -84,7 +84,11 @@ export async function GET(request: NextRequest) {
     const validatedParams = getReelsSchema.parse(queryParams);
 
     // Parse pagination parameters
-    const paginationParams = parsePaginationParams(request, PAGINATION_CONFIGS.REELS);
+    const paginationParams = parsePaginationParams(request, {
+      ...PAGINATION_CONFIGS.REELS,
+      allowedSortFields: [...PAGINATION_CONFIGS.REELS.allowedSortFields],
+      allowedSortOrders: [...PAGINATION_CONFIGS.REELS.allowedSortOrders],
+    });
 
     // Generate cache key
     const cacheKey = CACHE_KEYS.reelList(JSON.stringify(paginationParams));
@@ -133,7 +137,7 @@ export async function GET(request: NextRequest) {
 
     // Execute queries in parallel
     const [reels, total] = await Promise.all([
-      prisma.reel.findMany({
+      prisma.videoReel.findMany({
         where,
         orderBy,
         skip: paginationParams.offset,
@@ -150,18 +154,18 @@ export async function GET(request: NextRequest) {
           },
           _count: {
             select: {
-              comments: true,
+              videoComments: true,
             },
           },
         },
       }),
-      prisma.reel.count({ where }),
+      prisma.videoReel.count({ where }),
     ]);
 
     // Transform the response
-    const transformedReels = reels.map(reel => ({
+    const transformedReels = reels.map((reel: any) => ({
       ...reel,
-      commentsCount: reel._count.comments,
+      commentsCount: reel._count.videoComments,
       _count: undefined,
     }));
 
@@ -169,7 +173,11 @@ export async function GET(request: NextRequest) {
     const result = createPaginationResult(transformedReels, total, paginationParams);
 
     // Cache the result
-    await cacheManager.set(cacheKey, result, CACHE_CONFIGS.REEL);
+    await cacheManager.set(cacheKey, result, {
+      ...CACHE_CONFIGS.REEL,
+      tags: ["reel"],
+      vary: [...CACHE_CONFIGS.REEL.vary],
+    });
 
     // Return response with cache headers
     const response = NextResponse.json({
@@ -261,13 +269,13 @@ export async function POST(request: NextRequest) {
     // Ensure unique slug
     let uniqueSlug = slug;
     let counter = 1;
-    while (await prisma.reel.findFirst({ where: { slug: uniqueSlug } })) {
+    while (await prisma.videoReel.findFirst({ where: { slug: uniqueSlug } })) {
       uniqueSlug = `${slug}-${counter}`;
       counter++;
     }
 
     // Create reel
-    const reel = await prisma.reel.create({
+    const reel = await prisma.videoReel.create({
       data: {
         ...validatedData,
         slug: uniqueSlug,

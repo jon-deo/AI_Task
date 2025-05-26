@@ -5,7 +5,6 @@ import { config } from '@/config';
 // OpenAI Client Configuration
 export const openai = new OpenAI({
   apiKey: config.openai.apiKey,
-  organization: config.openai.organizationId,
   maxRetries: 3,
   timeout: 60000, // 60 seconds
 });
@@ -74,11 +73,10 @@ Structure:
 5. Call to action (last 3 seconds) - encourage engagement
 
 Output format:
-- Plain text script only
+- Use SSML tags: <emphasis> for key moments/achievements, <break time="500ms"/> for natural pauses
+- Wrap the script in <speak>...</speak>
 - Natural speech patterns
-- Include [PAUSE] markers for dramatic effect
-- Mark emphasis with *asterisks*
-- End with engaging question or statement
+- End with an engaging question or statement
 
 Script:`,
 

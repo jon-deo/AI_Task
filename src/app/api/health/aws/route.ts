@@ -11,101 +11,32 @@ export async function GET(request: NextRequest) {
   try {
     const startTime = Date.now();
 
-    // Run health checks in parallel
-    const [
-      awsHealth,
-      cloudFrontHealth,
-      s3ListTest,
-    ] = await Promise.allSettled([
-      checkAWSHealth(),
-      CloudFrontService.healthCheck(),
-      testS3Operations(),
-    ]);
+    // Run health check
+    const health = await checkAWSHealth();
 
     const endTime = Date.now();
     const responseTime = endTime - startTime;
 
     // Process results
     const results = {
-      overall: 'healthy' as 'healthy' | 'degraded' | 'unhealthy',
+      overall: health.s3 && health.cloudfront ? 'healthy' : 'unhealthy',
       responseTime,
       timestamp: new Date().toISOString(),
       services: {
         s3: {
-          status: 'unknown' as 'healthy' | 'degraded' | 'unhealthy',
-          details: {} as any,
+          status: health.s3 ? 'healthy' : 'unhealthy',
+          details: {},
         },
         cloudfront: {
-          status: 'unknown' as 'healthy' | 'degraded' | 'unhealthy',
-          details: {} as any,
+          status: health.cloudfront ? 'healthy' : 'unhealthy',
+          details: {},
         },
       },
-      errors: [] as string[],
+      errors: health.errors,
     };
 
-    // Process AWS health check
-    if (awsHealth.status === 'fulfilled') {
-      const health = awsHealth.value;
-      results.services.s3.status = health.s3 ? 'healthy' : 'unhealthy';
-      results.services.cloudfront.status = health.cloudfront ? 'healthy' : 'unhealthy';
-      
-      if (health.errors.length > 0) {
-        results.errors.push(...health.errors);
-      }
-    } else {
-      results.services.s3.status = 'unhealthy';
-      results.services.cloudfront.status = 'unhealthy';
-      results.errors.push(`AWS health check failed: ${awsHealth.reason}`);
-    }
-
-    // Process CloudFront health check
-    if (cloudFrontHealth.status === 'fulfilled') {
-      const cfHealth = cloudFrontHealth.value;
-      results.services.cloudfront.details = {
-        distributionCount: cfHealth.distributionCount,
-        healthy: cfHealth.healthy,
-      };
-      
-      if (!cfHealth.healthy) {
-        results.services.cloudfront.status = 'unhealthy';
-        results.errors.push(...cfHealth.errors);
-      }
-    } else {
-      results.services.cloudfront.status = 'unhealthy';
-      results.errors.push(`CloudFront health check failed: ${cloudFrontHealth.reason}`);
-    }
-
-    // Process S3 operations test
-    if (s3ListTest.status === 'fulfilled') {
-      const s3Test = s3ListTest.value;
-      results.services.s3.details = {
-        canList: s3Test.canList,
-        fileCount: s3Test.fileCount,
-        testDuration: s3Test.duration,
-      };
-      
-      if (!s3Test.canList) {
-        results.services.s3.status = 'degraded';
-      }
-    } else {
-      results.services.s3.status = 'degraded';
-      results.errors.push(`S3 operations test failed: ${s3ListTest.reason}`);
-    }
-
-    // Determine overall health
-    const serviceStatuses = Object.values(results.services).map(s => s.status);
-    
-    if (serviceStatuses.every(status => status === 'healthy')) {
-      results.overall = 'healthy';
-    } else if (serviceStatuses.some(status => status === 'unhealthy')) {
-      results.overall = 'unhealthy';
-    } else {
-      results.overall = 'degraded';
-    }
-
     // Return appropriate status code
-    const statusCode = results.overall === 'healthy' ? 200 : 
-                      results.overall === 'degraded' ? 200 : 503;
+    const statusCode = results.overall === 'healthy' ? 200 : 503;
 
     return NextResponse.json(results, { status: statusCode });
   } catch (error) {
@@ -119,7 +50,7 @@ export async function GET(request: NextRequest) {
         s3: { status: 'unhealthy', details: {} },
         cloudfront: { status: 'unhealthy', details: {} },
       },
-      errors: [`Health check failed: ${error}`],
+      errors: [`Health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
     }, { status: 503 });
   }
 }

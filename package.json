@@ -83,6 +83,7 @@
     "@types/react": "^18.3.22",
     "@types/react-dom": "^18.2.18",
     "@types/react-window": "^1.8.8",
+    "@types/uuid": "^10.0.0",
     "@types/video.js": "^7.3.58",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
