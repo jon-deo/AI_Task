@@ -138,7 +138,13 @@ export async function GET(request: NextRequest) {
         prisma.celebrity.count({ where: celebrityWhere }),
       ]);
 
-      results.celebrities = celebrities;
+      // Transform celebrities
+      results.celebrities = celebrities.map(celebrity => ({
+        ...celebrity,
+        // Convert BigInt fields to strings for JSON serialization
+        totalViews: celebrity.totalViews.toString(),
+        totalLikes: celebrity.totalLikes.toString(),
+      }));
       if (validatedParams.type === 'celebrities') {
         results.pagination = createPaginationResult(celebrities, celebrityCount, paginationParams).pagination;
         results.totalResults = celebrityCount;
@@ -208,6 +214,12 @@ export async function GET(request: NextRequest) {
       // Transform reels
       results.reels = reels.map(reel => ({
         ...reel,
+        // Convert BigInt fields to strings for JSON serialization
+        views: reel.views.toString(),
+        likes: reel.likes.toString(),
+        shares: reel.shares.toString(),
+        comments: reel.comments.toString(),
+        fileSize: reel.fileSize.toString(),
         commentsCount: reel._count.videoComments,
         _count: undefined,
       }));
@@ -227,20 +239,21 @@ export async function GET(request: NextRequest) {
     await cacheManager.set(cacheKey, results, CACHE_CONFIGS.SEARCH);
 
     // Log search query for analytics
-    prisma.searchQuery.create({
-      data: {
-        query: validatedParams.q,
-        type: validatedParams.type,
-        resultsCount: results.totalResults,
-        filters: {
-          sport: validatedParams.sport,
-          minDuration: validatedParams.minDuration,
-          maxDuration: validatedParams.maxDuration,
-        },
-        userAgent: request.headers.get('user-agent') || '',
-        ip: request.ip || request.headers.get('x-forwarded-for') || '',
-      },
-    }).catch(console.error);
+    // Temporarily disabled to debug BigInt serialization issue
+    // prisma.searchQuery.create({
+    //   data: {
+    //     query: validatedParams.q,
+    //     type: validatedParams.type,
+    //     resultsCount: results.totalResults,
+    //     filters: {
+    //       sport: validatedParams.sport,
+    //       minDuration: validatedParams.minDuration,
+    //       maxDuration: validatedParams.maxDuration,
+    //     },
+    //     userAgent: request.headers.get('user-agent') || '',
+    //     ip: request.ip || request.headers.get('x-forwarded-for') || '',
+    //   },
+    // }).catch(console.error);
 
     // Return response with cache headers
     const response = NextResponse.json({

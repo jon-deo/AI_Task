@@ -263,11 +263,84 @@ export async function POST(req: Request) {
         },
       });
 
-      return NextResponse.json({
-        success: true,
-        id: video.id,
-        data: video,
+      // Get celebrity from database for VideoReel creation
+      const celebrity = await prisma.celebrity.findFirst({
+        where: { name: celebrityName },
       });
+
+      if (!celebrity) {
+        return NextResponse.json(
+          { success: false, error: 'Celebrity not found' },
+          { status: 404 }
+        );
+      }
+
+      // Also create a corresponding VideoReel record for API compatibility
+      const slug = result.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+
+      // Ensure unique slug
+      let uniqueSlug = slug;
+      let counter = 1;
+      while (await prisma.videoReel.findFirst({ where: { slug: uniqueSlug } })) {
+        uniqueSlug = `${slug}-${counter}`;
+        counter++;
+      }
+
+      try {
+        console.log('Creating VideoReel with data:', {
+          title: result.title,
+          celebrityId: celebrity.id,
+          videoUrl: result.videoUrl,
+          duration: result.metadata.duration,
+          slug: uniqueSlug,
+        });
+
+        const videoReel = await prisma.videoReel.create({
+          data: {
+            // Let Prisma generate a new ID for the VideoReel
+            title: result.title,
+            description: result.description,
+            celebrityId: celebrity.id,
+            videoUrl: result.videoUrl,
+            thumbnailUrl: result.thumbnailUrl,
+            duration: result.metadata.duration,
+            script: result.script,
+            slug: uniqueSlug,
+            isPublic: true, // Make generated reels public for testing
+            isFeatured: false,
+            views: BigInt(0),
+            likes: BigInt(0),
+            shares: BigInt(0),
+            comments: BigInt(0),
+            fileSize: BigInt(result.metadata.fileSize),
+            resolution: result.metadata.resolution,
+            bitrate: '2000',
+            format: 'mp4',
+            status: 'COMPLETED',
+            s3Key: result.videoS3Key,
+            s3Bucket: 'your-bucket-name', // You might want to make this configurable
+          },
+        });
+
+        console.log('VideoReel created successfully with ID:', videoReel.id);
+
+        return NextResponse.json({
+          success: true,
+          id: videoReel.id, // Return the VideoReel ID so it can be accessed via /api/reels/[id]
+          data: video,
+        });
+      } catch (videoReelError) {
+        console.error('Failed to create VideoReel:', videoReelError);
+        // Return the video ID as fallback
+        return NextResponse.json({
+          success: true,
+          id: video.id,
+          data: video,
+        });
+      }
     }
 
     // Handle full request object (for advanced usage)

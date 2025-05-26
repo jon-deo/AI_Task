@@ -106,26 +106,26 @@ export async function GET(request: NextRequest) {
         topSports,
         recentReels,
       ] = await Promise.all([
-        prisma.reel.count({ where: { isPublished: true } }),
+        prisma.videoReel.count({ where: { isPublic: true } }),
         prisma.celebrity.count({ where: { isActive: true } }),
         prisma.user.count(),
-        prisma.reel.aggregate({
-          where: { 
-            isPublished: true,
+        prisma.videoReel.aggregate({
+          where: {
+            isPublic: true,
             createdAt: { gte: startDate }
           },
           _sum: { views: true },
         }),
-        prisma.reel.aggregate({
-          where: { 
-            isPublished: true,
+        prisma.videoReel.aggregate({
+          where: {
+            isPublic: true,
             createdAt: { gte: startDate }
           },
           _sum: { likes: true },
         }),
-        prisma.reel.aggregate({
-          where: { 
-            isPublished: true,
+        prisma.videoReel.aggregate({
+          where: {
+            isPublic: true,
             createdAt: { gte: startDate }
           },
           _sum: { shares: true },
@@ -138,9 +138,9 @@ export async function GET(request: NextRequest) {
           orderBy: { _sum: { totalViews: 'desc' } },
           take: 5,
         }),
-        prisma.reel.findMany({
-          where: { 
-            isPublished: true,
+        prisma.videoReel.findMany({
+          where: {
+            isPublic: true,
             createdAt: { gte: startDate }
           },
           include: {
@@ -185,18 +185,18 @@ export async function GET(request: NextRequest) {
       };
     } else if (validatedParams.type === 'reels') {
       // Get reel analytics
-      const where = validatedParams.entityId 
-        ? { id: validatedParams.entityId, isPublished: true }
-        : { isPublished: true, createdAt: { gte: startDate } };
+      const where = validatedParams.entityId
+        ? { id: validatedParams.entityId, isPublic: true }
+        : { isPublic: true, createdAt: { gte: startDate } };
 
       const [reelStats, topReels, viewsByDay] = await Promise.all([
-        prisma.reel.aggregate({
+        prisma.videoReel.aggregate({
           where,
           _count: { id: true },
           _sum: { views: true, likes: true, shares: true },
           _avg: { duration: true },
         }),
-        prisma.reel.findMany({
+        prisma.videoReel.findMany({
           where,
           include: {
             celebrity: {
@@ -207,7 +207,7 @@ export async function GET(request: NextRequest) {
           take: 20,
         }),
         // This would need a proper analytics table in production
-        prisma.reel.groupBy({
+        prisma.videoReel.groupBy({
           by: ['createdAt'],
           where,
           _sum: { views: true },
@@ -246,7 +246,7 @@ export async function GET(request: NextRequest) {
       };
     } else if (validatedParams.type === 'celebrities') {
       // Get celebrity analytics
-      const where = validatedParams.entityId 
+      const where = validatedParams.entityId
         ? { id: validatedParams.entityId, isActive: true }
         : { isActive: true };
 

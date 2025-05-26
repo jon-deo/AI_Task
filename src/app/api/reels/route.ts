@@ -165,6 +165,12 @@ export async function GET(request: NextRequest) {
     // Transform the response
     const transformedReels = reels.map((reel: any) => ({
       ...reel,
+      // Convert BigInt fields to strings for JSON serialization
+      views: reel.views.toString(),
+      likes: reel.likes.toString(),
+      shares: reel.shares.toString(),
+      comments: reel.comments.toString(),
+      fileSize: reel.fileSize.toString(),
       commentsCount: reel._count.videoComments,
       _count: undefined,
     }));
@@ -325,10 +331,20 @@ export async function POST(request: NextRequest) {
     await cacheManager.invalidateByTag('reel');
     await cacheManager.invalidateByTag('celebrity');
 
+    // Transform BigInt fields to strings for JSON serialization
+    const transformedReel = {
+      ...reel,
+      views: reel.views.toString(),
+      likes: reel.likes.toString(),
+      shares: reel.shares.toString(),
+      comments: reel.comments.toString(),
+      fileSize: reel.fileSize.toString(),
+    };
+
     return NextResponse.json(
       {
         success: true,
-        data: reel,
+        data: transformedReel,
         message: 'Reel created successfully',
       },
       { status: 201 }

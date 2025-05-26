@@ -67,13 +67,13 @@ export async function GET(
     }
 
     // Find reel by ID or slug
-    const reel = await prisma.reel.findFirst({
+    const reel = await prisma.videoReel.findFirst({
       where: {
         OR: [
           { id },
           { slug: id },
         ],
-        isPublished: true,
+        isPublic: true,
       },
       include: {
         celebrity: {
@@ -84,26 +84,26 @@ export async function GET(
             nationality: true,
             imageUrl: true,
             slug: true,
-            isVerified: true,
           },
         },
-        comments: {
+        videoComments: {
           where: { isApproved: true },
-          select: {
-            id: true,
-            content: true,
-            authorName: true,
-            authorEmail: true,
-            likes: true,
-            createdAt: true,
-            replies: {
-              where: { isApproved: true },
+          include: {
+            user: {
               select: {
-                id: true,
-                content: true,
-                authorName: true,
-                likes: true,
-                createdAt: true,
+                displayName: true,
+                email: true
+              }
+            },
+            children: {
+              where: { isApproved: true },
+              include: {
+                user: {
+                  select: {
+                    displayName: true,
+                    email: true
+                  }
+                }
               },
               orderBy: { createdAt: 'asc' },
               take: 5,
@@ -114,9 +114,7 @@ export async function GET(
         },
         _count: {
           select: {
-            comments: {
-              where: { isApproved: true },
-            },
+            videoComments: true,
           },
         },
       },
@@ -133,11 +131,11 @@ export async function GET(
     }
 
     // Get related reels from same celebrity
-    const relatedReels = await prisma.reel.findMany({
+    const relatedReels = await prisma.videoReel.findMany({
       where: {
         celebrityId: reel.celebrityId,
         id: { not: reel.id },
-        isPublished: true,
+        isPublic: true,
       },
       select: {
         id: true,
@@ -155,16 +153,30 @@ export async function GET(
     // Transform the response
     const responseData = {
       ...reel,
-      commentsCount: reel._count.comments,
-      relatedReels,
+      // Convert BigInt fields to strings for JSON serialization
+      views: reel.views.toString(),
+      likes: reel.likes.toString(),
+      shares: reel.shares.toString(),
+      comments: reel.comments.toString(),
+      fileSize: reel.fileSize.toString(),
+      commentsCount: reel._count.videoComments,
+      relatedReels: relatedReels.map(relatedReel => ({
+        ...relatedReel,
+        views: relatedReel.views.toString(),
+        likes: relatedReel.likes.toString(),
+      })),
       _count: undefined,
     };
 
     // Cache the result
-    await cacheManager.set(cacheKey, responseData, CACHE_CONFIGS.REEL);
+    await cacheManager.set(cacheKey, responseData, {
+      ...CACHE_CONFIGS.REEL,
+      tags: [...CACHE_CONFIGS.REEL.tags],
+      vary: [...CACHE_CONFIGS.REEL.vary],
+    });
 
     // Increment view count asynchronously
-    prisma.reel.update({
+    prisma.videoReel.update({
       where: { id: reel.id },
       data: { views: { increment: 1 } },
     }).catch(console.error);
@@ -236,7 +248,7 @@ export async function PUT(
     const validatedData = updateReelSchema.parse(body);
 
     // Check if reel exists
-    const existingReel = await prisma.reel.findUnique({
+    const existingReel = await prisma.videoReel.findUnique({
       where: { id },
     });
 
@@ -261,11 +273,11 @@ export async function PUT(
       // Ensure unique slug
       let uniqueSlug = newSlug;
       let counter = 1;
-      while (await prisma.reel.findFirst({ 
-        where: { 
+      while (await prisma.videoReel.findFirst({
+        where: {
           slug: uniqueSlug,
           id: { not: id }
-        } 
+        }
       })) {
         uniqueSlug = `${newSlug}-${counter}`;
         counter++;
@@ -275,7 +287,7 @@ export async function PUT(
     }
 
     // Update reel
-    const updatedReel = await prisma.reel.update({
+    const updatedReel = await prisma.videoReel.update({
       where: { id },
       data: updateData,
       include: {
@@ -296,9 +308,19 @@ export async function PUT(
     await cacheManager.delete(CACHE_KEYS.reel(existingReel.slug));
     await cacheManager.invalidateByTag('reel');
 
+    // Transform BigInt fields to strings for JSON serialization
+    const transformedReel = {
+      ...updatedReel,
+      views: updatedReel.views.toString(),
+      likes: updatedReel.likes.toString(),
+      shares: updatedReel.shares.toString(),
+      comments: updatedReel.comments.toString(),
+      fileSize: updatedReel.fileSize.toString(),
+    };
+
     return NextResponse.json({
       success: true,
-      data: updatedReel,
+      data: transformedReel,
       message: 'Reel updated successfully',
     });
   } catch (error) {
@@ -356,10 +378,10 @@ export async function POST(
     const { action } = reelActionSchema.parse(body);
 
     // Find reel
-    const reel = await prisma.reel.findFirst({
+    const reel = await prisma.videoReel.findFirst({
       where: {
         OR: [{ id }, { slug: id }],
-        isPublished: true,
+        isPublic: true,
       },
     });
 
@@ -397,7 +419,7 @@ export async function POST(
 
     // Update reel and celebrity stats in parallel
     const [updatedReel] = await Promise.all([
-      prisma.reel.update({
+      prisma.videoReel.update({
         where: { id: reel.id },
         data: updateData,
         select: {
@@ -417,11 +439,19 @@ export async function POST(
     await cacheManager.delete(CACHE_KEYS.reel(id));
     await cacheManager.delete(CACHE_KEYS.reel(reel.slug));
 
+    // Transform BigInt fields to strings for JSON serialization
+    const transformedReel = {
+      ...updatedReel,
+      views: updatedReel.views.toString(),
+      likes: updatedReel.likes.toString(),
+      shares: updatedReel.shares.toString(),
+    };
+
     return NextResponse.json({
       success: true,
       data: {
         action,
-        reel: updatedReel,
+        reel: transformedReel,
       },
       message: `Reel ${action} successful`,
     });

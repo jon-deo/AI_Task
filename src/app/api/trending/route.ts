@@ -128,6 +128,12 @@ export async function GET(request: NextRequest) {
         period: validatedParams.period,
         data: trendingReels.map(reel => ({
           ...reel,
+          // Convert BigInt fields to strings for JSON serialization
+          views: reel.views.toString(),
+          likes: reel.likes.toString(),
+          shares: reel.shares.toString(),
+          comments: reel.comments.toString(),
+          fileSize: reel.fileSize.toString(),
           commentsCount: reel._count.videoComments,
           _count: undefined,
         })),
@@ -172,7 +178,13 @@ export async function GET(request: NextRequest) {
       results = {
         type: 'celebrities',
         period: validatedParams.period,
-        data: trendingCelebrities,
+        data: trendingCelebrities.map(celebrity => ({
+          ...celebrity,
+          // Convert BigInt fields to strings for JSON serialization
+          totalViews: celebrity.totalViews.toString(),
+          totalLikes: celebrity.totalLikes.toString(),
+          totalShares: celebrity.totalShares.toString(),
+        })),
         metadata: {
           totalCount: trendingCelebrities.length,
           sport: validatedParams.sport,
@@ -214,8 +226,8 @@ export async function GET(request: NextRequest) {
         period: validatedParams.period,
         data: sportStats.map(stat => ({
           sport: stat.sport,
-          totalViews: stat._sum.totalViews || 0,
-          totalLikes: stat._sum.totalLikes || 0,
+          totalViews: (stat._sum.totalViews || BigInt(0)).toString(),
+          totalLikes: (stat._sum.totalLikes || BigInt(0)).toString(),
           totalReels: stat._sum.reelsCount || 0,
           celebrityCount: stat._count.id,
         })),
@@ -344,8 +356,21 @@ export async function POST(request: NextRequest) {
     });
 
     const featuredContent = {
-      reels: featuredReels,
-      celebrities: featuredCelebrities,
+      reels: featuredReels.map(reel => ({
+        ...reel,
+        // Convert BigInt fields to strings for JSON serialization
+        views: reel.views.toString(),
+        likes: reel.likes.toString(),
+        shares: reel.shares.toString(),
+        comments: reel.comments.toString(),
+        fileSize: reel.fileSize.toString(),
+      })),
+      celebrities: featuredCelebrities.map(celebrity => ({
+        ...celebrity,
+        // Convert BigInt fields to strings for JSON serialization
+        totalViews: celebrity.totalViews.toString(),
+        totalLikes: celebrity.totalLikes.toString(),
+      })),
       lastUpdated: new Date().toISOString(),
     };
 

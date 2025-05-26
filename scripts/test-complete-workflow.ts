@@ -1,8 +1,10 @@
 // scripts/test-complete-workflow.ts
 import axios from 'axios';
 import { ImageGenerator } from '../src/services/image-generator';
+import { PrismaClient } from '@prisma/client';
 
 const API_BASE = 'http://localhost:3000/api';
+const prisma = new PrismaClient();
 
 interface GenerateResponse {
   success: boolean;
@@ -62,10 +64,34 @@ const apiCelebrity = {
   updatedAt: testCelebrity.updatedAt.toISOString()
 };
 
+async function setupTestUser() {
+  try {
+    const testUser = await prisma.user.upsert({
+      where: { email: 'test@example.com' },
+      update: {},
+      create: {
+        email: 'test@example.com',
+        username: 'testuser',
+        displayName: 'Test User',
+        isActive: true,
+        isVerified: true,
+      },
+    });
+    return testUser;
+  } catch (error) {
+    console.error('Failed to create test user:', error);
+    throw error;
+  }
+}
+
 async function testWorkflow1() {
   console.log('Testing Workflow 1: Content Generation');
 
   try {
+    // Create test user first
+    const testUser = await setupTestUser();
+    console.log('Test user created:', testUser);
+
     // Generate test images first
     console.log('\nGenerating test images...');
     const testImages = await ImageGenerator.generateCelebrityImages(testCelebrity, 3, {
@@ -108,8 +134,8 @@ async function testWorkflow1() {
     console.log('\n3. Waiting for processing...');
     let isComplete = false;
     let attempts = 0;
-    const maxAttempts = 20; // Increased max attempts
-    const waitTime = 5000; // 5 seconds
+    const maxAttempts = 20;
+    const waitTime = 5000;
 
     while (!isComplete && attempts < maxAttempts) {
       attempts++;
@@ -145,14 +171,14 @@ async function testWorkflow1() {
       throw new Error('Processing did not complete within the expected time');
     }
 
-    return reelId;
+    return { reelId, userId: testUser.id };
   } catch (error: any) {
     console.error('Workflow 1 failed:', error.response?.data || error.message);
     throw error;
   }
 }
 
-async function testWorkflow2(reelId: string) {
+async function testWorkflow2({ reelId, userId }: { reelId: string; userId: string }) {
   console.log('\nTesting Workflow 2: User Interaction');
 
   try {
@@ -182,11 +208,11 @@ async function testWorkflow2(reelId: string) {
 
     try {
       // Like the reel
-      await axios.post(`${API_BASE}/reels/${reelId}/like`);
+      await axios.post(`${API_BASE}/reels/${reelId}/like`, { userId });
       console.log('Liked the reel');
 
       // Share the reel
-      await axios.post(`${API_BASE}/reels/${reelId}/share`);
+      await axios.post(`${API_BASE}/reels/${reelId}/share`, { userId, platform: 'OTHER' });
       console.log('Shared the reel');
     } catch (interactionError: any) {
       console.error('Interaction failed:', interactionError.response?.data || interactionError.message);
@@ -212,15 +238,17 @@ async function runTests() {
     console.log('Starting complete workflow tests...');
 
     // Test Workflow 1
-    const reelId = await testWorkflow1();
+    const { reelId, userId } = await testWorkflow1();
 
     // Test Workflow 2
-    await testWorkflow2(reelId);
+    await testWorkflow2({ reelId, userId });
 
     console.log('\nAll tests completed successfully!');
   } catch (error) {
     console.error('Tests failed:', error);
     process.exit(1);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 

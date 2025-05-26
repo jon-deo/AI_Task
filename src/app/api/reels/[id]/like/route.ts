@@ -32,6 +32,20 @@ export async function POST(
 
     const reelId = params.id;
 
+    // Parse request body
+    const body = await request.json();
+    const userId = body.userId;
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'User ID is required',
+        },
+        { status: 400 }
+      );
+    }
+
     // Validate reel exists
     const reel = await prisma.videoReel.findUnique({
       where: { id: reelId },
@@ -46,10 +60,6 @@ export async function POST(
         { status: 404 }
       );
     }
-
-    // For now, we'll simulate user interaction without authentication
-    // In production, you would get the user ID from the authenticated session
-    const userId = 'anonymous-user'; // This should come from auth
 
     // Check if user already liked this reel
     const existingLike = await prisma.userVideoLike.findUnique({
@@ -108,7 +118,7 @@ export async function POST(
             userLikes: true,
             userShares: true,
             userViews: true,
-            comments: true,
+            videoComments: true,
           },
         },
       },
@@ -124,10 +134,20 @@ export async function POST(
       },
     });
 
+    // Transform BigInt fields to strings for JSON serialization
+    const transformedReel = {
+      ...updatedReel,
+      views: updatedReel.views.toString(),
+      likes: updatedReel.likes.toString(),
+      shares: updatedReel.shares.toString(),
+      comments: updatedReel.comments.toString(),
+      fileSize: updatedReel.fileSize.toString(),
+    };
+
     return NextResponse.json({
       success: true,
       data: {
-        reel: updatedReel,
+        reel: transformedReel,
         isLiked,
         likesCount: Number(updatedReel.likes),
       },

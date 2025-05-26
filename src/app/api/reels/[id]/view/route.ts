@@ -105,7 +105,7 @@ export async function POST(
               userLikes: true,
               userShares: true,
               userViews: true,
-              comments: true,
+              videoComments: true,
             },
           },
         },

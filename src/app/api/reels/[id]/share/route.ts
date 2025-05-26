@@ -7,7 +7,7 @@ import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiting';
 const shareSchema = z.object({
   platform: z.enum([
     'TWITTER',
-    'FACEBOOK', 
+    'FACEBOOK',
     'INSTAGRAM',
     'LINKEDIN',
     'WHATSAPP',
@@ -20,6 +20,7 @@ const shareSchema = z.object({
     'COPY_LINK',
     'OTHER'
   ]),
+  userId: z.string().optional(),
 });
 
 const rateLimitMiddleware = createRateLimitMiddleware(RATE_LIMITS.PUBLIC);
@@ -52,7 +53,7 @@ export async function POST(
 
     // Parse and validate request body
     const body = await request.json();
-    const { platform } = shareSchema.parse(body);
+    const { platform, userId: requestUserId } = shareSchema.parse(body);
 
     // Validate reel exists
     const reel = await prisma.videoReel.findUnique({
@@ -78,9 +79,9 @@ export async function POST(
       );
     }
 
-    // For now, we'll simulate user interaction without authentication
+    // Use provided userId or fallback to anonymous user
     // In production, you would get the user ID from the authenticated session
-    const userId = 'anonymous-user'; // This should come from auth
+    const userId = requestUserId || 'anonymous-user';
 
     // Record the share
     await prisma.userVideoShare.create({
@@ -132,7 +133,7 @@ export async function POST(
 
     // Generate share URL
     const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reel/${reelId}`;
-    
+
     // Generate share text
     const shareText = `Check out this amazing ${reel.celebrity.sport} reel about ${reel.celebrity.name}! ${reel.title}`;
 

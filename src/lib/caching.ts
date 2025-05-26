@@ -129,7 +129,7 @@ class RedisCacheStore implements CacheStore {
   async set(key: string, value: CacheEntry, ttl: number): Promise<void> {
     try {
       await this.redisClient.setex(key, ttl, JSON.stringify(value));
-      
+
       // Update tag index
       if (value.tags) {
         for (const tag of value.tags) {
@@ -147,7 +147,7 @@ class RedisCacheStore implements CacheStore {
       // Get entry to remove from tag index
       const entry = await this.get(key);
       await this.redisClient.del(key);
-      
+
       if (entry?.tags) {
         for (const tag of entry.tags) {
           await this.redisClient.srem(`tag:${tag}`, key);
@@ -230,7 +230,13 @@ export class CacheManager {
 
   private generateETag(data: any): string {
     // Simple ETag generation based on content hash
-    const content = JSON.stringify(data);
+    // Custom JSON.stringify that handles BigInt values
+    const content = JSON.stringify(data, (key, value) => {
+      if (typeof value === 'bigint') {
+        return value.toString();
+      }
+      return value;
+    });
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
@@ -348,10 +354,10 @@ export function withCache<T>(
 
     // Check for conditional requests
     const ifNoneMatch = request.headers.get('if-none-match');
-    
+
     // Try to get from cache
     const cached = await cacheManager.store.get(cacheKey);
-    
+
     if (cached) {
       // Check ETag for conditional requests
       if (ifNoneMatch && cached.etag === ifNoneMatch) {
@@ -360,36 +366,36 @@ export function withCache<T>(
 
       // Return cached response
       const response = NextResponse.json(cached.data);
-      
+
       // Add cache headers
       if (cached.headers) {
         Object.entries(cached.headers).forEach(([key, value]) => {
           response.headers.set(key, value);
         });
       }
-      
+
       if (cached.etag) {
         response.headers.set('ETag', cached.etag);
       }
-      
+
       response.headers.set('X-Cache', 'HIT');
       return response;
     }
 
     // Execute handler
     const response = await handler(request);
-    
+
     // Cache successful responses
     if (response.status === 200) {
       const data = await response.clone().json();
       await cacheManager.set(cacheKey, data, config);
-      
+
       // Add cache headers to response
       const headers = cacheManager['generateCacheHeaders'](config);
       Object.entries(headers).forEach(([key, value]) => {
         response.headers.set(key, value);
       });
-      
+
       response.headers.set('X-Cache', 'MISS');
     }
 
