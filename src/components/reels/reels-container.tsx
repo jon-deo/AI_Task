@@ -7,12 +7,8 @@ import { Video } from '@/types/video';
 import { useReels } from '@/hooks/use-reels';
 import { useInView } from 'react-intersection-observer';
 
-// Optimized dynamic imports with proper error boundaries
-const ReelItem = React.lazy(() =>
-  import('./reel-item').then(module => ({ default: module.ReelItem })).catch(() => ({
-    default: () => <div className="h-full bg-gray-800 flex items-center justify-center text-white">Failed to load reel</div>
-  }))
-);
+// Use simple reel item to avoid hooks issues
+import { SimpleReelItem as ReelItem } from './simple-reel-item';
 
 const ReelsLoading = React.lazy(() =>
   import('./reels-loading').then(module => ({ default: module.ReelsLoading })).catch(() => ({
@@ -102,7 +98,7 @@ export const ReelsContainer = memo(function ReelsContainer({
   // Preload adjacent videos with safe checks
   const preloadAdjacentVideos = useCallback((currentIndex: number) => {
     if (!Array.isArray(reels) || reels.length === 0) return;
-    
+
     const preloadIndexes = [currentIndex - 1, currentIndex + 1];
     preloadIndexes.forEach(index => {
       if (index >= 0 && index < reels.length) {
@@ -119,7 +115,7 @@ export const ReelsContainer = memo(function ReelsContainer({
   // Memoize visible reels with safe checks
   const visibleReels = useMemo(() => {
     if (!Array.isArray(reels) || reels.length === 0) return [];
-    
+
     const start = Math.max(0, currentIndex - 1);
     const end = Math.min(reels.length, currentIndex + 3);
     return reels.slice(start, end).map(reel => {
@@ -128,6 +124,41 @@ export const ReelsContainer = memo(function ReelsContainer({
       return cachedData ? { ...reel, ...cachedData } : reel;
     }).filter(Boolean);
   }, [reels, currentIndex, getCachedData]);
+
+  // Handle scroll detection to update current index
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !Array.isArray(reels) || reels.length === 0) return;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      const containerHeight = container.clientHeight;
+      const newIndex = Math.round(scrollTop / containerHeight);
+
+      // Update current index if it changed
+      if (newIndex !== currentIndex && newIndex >= 0 && newIndex < reels.length) {
+        console.log('Scroll detected - changing from index', currentIndex, 'to', newIndex);
+        setCurrentIndex(newIndex);
+      }
+
+      // Handle scrolling state
+      setIsScrolling(true);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+      scrollTimeoutRef.current = window.setTimeout(() => {
+        setIsScrolling(false);
+      }, 150);
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
+  }, [currentIndex, reels]);
 
   // Load more reels with safe checks
   useEffect(() => {
@@ -181,7 +212,7 @@ export const ReelsContainer = memo(function ReelsContainer({
   // Handle video end with safe checks
   const handleVideoEnd = useCallback(() => {
     if (!Array.isArray(reels) || reels.length === 0) return;
-    
+
     if (currentIndex < reels.length - 1) {
       const newIndex = currentIndex + 1;
       setCurrentIndex(newIndex);
@@ -199,7 +230,7 @@ export const ReelsContainer = memo(function ReelsContainer({
   // Handle generate video with safe checks
   const handleGenerateVideo = async (celebrity: string) => {
     if (!celebrity || !onGenerate) return;
-    
+
     try {
       const video = await onGenerate(celebrity);
       if (video) {
@@ -210,29 +241,61 @@ export const ReelsContainer = memo(function ReelsContainer({
     }
   };
 
-  // Error state with safe checks
-  if (error && (!Array.isArray(reels) || reels.length === 0)) {
-    return (
-      <div className="flex h-full items-center justify-center bg-black text-white">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">Something went wrong</h2>
-          <p className="text-gray-400 mb-4">{error}</p>
-          <button
-            onClick={refresh}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Check states for conditional rendering
+  const showEmptyState = !loading && reels.length === 0;
+  const showErrorState = error && (!Array.isArray(reels) || reels.length === 0);
 
   return (
     <div className="relative h-screen bg-black overflow-hidden">
-      {/* Main reels container */}
-      <div
-        ref={containerRef}
+      {showEmptyState ? (
+        // Empty state
+        <div className="h-screen bg-black flex items-center justify-center text-white">
+          <div className="text-center p-8">
+            <div className="text-8xl mb-6">🎬</div>
+            <h2 className="text-2xl font-bold mb-4">No Videos Available</h2>
+            <p className="text-gray-400 mb-6">There are no video reels to display yet.</p>
+            <div className="space-y-3">
+              <button
+                onClick={() => window.location.reload()}
+                className="block w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
+              >
+                Refresh Page
+              </button>
+              {onGenerate && (
+                <button
+                  onClick={() => handleGenerateVideo('Michael Jordan')}
+                  disabled={isGenerating}
+                  className="block w-full px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors"
+                >
+                  {isGenerating ? 'Generating...' : 'Generate Sample Video'}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-4">
+              Try running: npm run create:test-reels
+            </p>
+          </div>
+        </div>
+      ) : showErrorState ? (
+        // Error state
+        <div className="flex h-full items-center justify-center bg-black text-white">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold mb-2">Something went wrong</h2>
+            <p className="text-gray-400 mb-4">{error}</p>
+            <button
+              onClick={refresh}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      ) : (
+        // Main content
+        <>
+          {/* Main reels container */}
+          <div
+            ref={containerRef}
         className="h-full overflow-y-auto snap-y snap-mandatory scrollbar-hide reel-container"
         style={{
           scrollbarWidth: 'none',
@@ -243,7 +306,7 @@ export const ReelsContainer = memo(function ReelsContainer({
         <AnimatePresence mode="wait">
           {Array.isArray(reels) && reels.map((reel, index) => {
             if (!reel?.id) return null;
-            
+
             // Only render reels that are visible or adjacent for performance
             const isVisible = Math.abs(index - currentIndex) <= 2;
 
@@ -261,23 +324,17 @@ export const ReelsContainer = memo(function ReelsContainer({
                 key={reel.id}
                 className="h-full snap-start snap-always reel-item"
               >
-                <Suspense fallback={
-                  <div className="h-full bg-black flex items-center justify-center text-white">
-                    Loading...
-                  </div>
-                }>
-                  <ReelItem
-                    reel={reel}
-                    isActive={index === currentIndex && !isScrolling}
-                    autoPlay={autoPlay}
-                    onVideoEnd={handleVideoEnd}
-                    onLike={likeReel}
-                    onShare={shareReel}
-                    onViewUpdate={updateViews}
-                    preloadNext={index === currentIndex + 1}
-                    preloadPrev={index === currentIndex - 1}
-                  />
-                </Suspense>
+                <ReelItem
+                  reel={reel}
+                  isActive={index === currentIndex && !isScrolling}
+                  autoPlay={autoPlay}
+                  onVideoEnd={handleVideoEnd}
+                  onLike={likeReel}
+                  onShare={shareReel}
+                  onViewUpdate={updateViews}
+                  preloadNext={index === currentIndex + 1}
+                  preloadPrev={index === currentIndex - 1}
+                />
               </motion.div>
             );
           })}
@@ -312,11 +369,13 @@ export const ReelsContainer = memo(function ReelsContainer({
         </div>
       </div>
 
-      {/* Loading overlay */}
-      {loading && (!Array.isArray(reels) || reels.length === 0) && (
-        <div className="absolute inset-0 bg-black flex items-center justify-center z-20">
-          <ReelsLoading />
-        </div>
+          {/* Loading overlay */}
+          {loading && (!Array.isArray(reels) || reels.length === 0) && (
+            <div className="absolute inset-0 bg-black flex items-center justify-center z-20">
+              <ReelsLoading />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

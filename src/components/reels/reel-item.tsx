@@ -1,14 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import type { VideoReelWithDetails } from '@/types';
 
-// Fallback components and hooks
-const motion = {
-  div: ({ children, className, ...props }: any) => <div className={className} {...props}>{children}</div>,
-  button: ({ children, className, onClick, ...props }: any) =>
-    <button className={className} onClick={onClick} {...props}>{children}</button>
-};
+// Fallback components and hooks (motion is imported from framer-motion)
 
 // Fallback icons
 const Heart = ({ className }: { className?: string }) => <div className={className}>♥</div>;
@@ -19,9 +15,10 @@ const Play = ({ className }: { className?: string }) => <div className={classNam
 const Pause = ({ className }: { className?: string }) => <div className={className}>⏸</div>;
 
 // Fallback components
-const VideoPlayer = ({ src, onClick, onDoubleClick, className, preload }: any) => {
+const VideoPlayer = ({ src, onClick, onDoubleClick, className, preload, onError }: any) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const [quality, setQuality] = useState<'auto' | 'high' | 'low'>('auto');
 
   // Handle quality switching based on network conditions
@@ -50,7 +47,7 @@ const VideoPlayer = ({ src, onClick, onDoubleClick, className, preload }: any) =
   useEffect(() => {
     if (videoRef.current) {
       const video = videoRef.current;
-      
+
       // Set appropriate quality
       if (quality === 'low') {
         video.playbackRate = 0.75;
@@ -59,11 +56,28 @@ const VideoPlayer = ({ src, onClick, onDoubleClick, className, preload }: any) =
       }
 
       // Handle loading state
-      const handleLoadedData = () => setIsLoaded(true);
+      const handleLoadedData = () => {
+        setIsLoaded(true);
+        setHasError(false);
+      };
+
+      const handleError = (error: Event) => {
+        console.error('Video loading error:', error);
+        console.log('Failed to load video:', src);
+        setHasError(true);
+        setIsLoaded(false);
+        if (onError) onError(error);
+      };
+
       video.addEventListener('loadeddata', handleLoadedData);
-      return () => video.removeEventListener('loadeddata', handleLoadedData);
+      video.addEventListener('error', handleError);
+
+      return () => {
+        video.removeEventListener('loadeddata', handleLoadedData);
+        video.removeEventListener('error', handleError);
+      };
     }
-  }, [quality]);
+  }, [quality, src, onError]);
 
   return (
     <div className="relative">
@@ -79,9 +93,18 @@ const VideoPlayer = ({ src, onClick, onDoubleClick, className, preload }: any) =
         loop={false}
         controls={false}
       />
-      {!isLoaded && (
+      {!isLoaded && !hasError && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/50">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+        </div>
+      )}
+      {hasError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-red-900/50">
+          <div className="text-center text-white p-4">
+            <div className="text-4xl mb-2">⚠️</div>
+            <p className="text-sm">Video failed to load</p>
+            <p className="text-xs text-gray-300 mt-1">Check console for details</p>
+          </div>
         </div>
       )}
     </div>
@@ -151,27 +174,36 @@ export function ReelItem({
 
   // Handle view tracking
   useEffect(() => {
-    if (isActive && !hasViewed && currentTime > 3) {
+    if (isActive && !hasViewed && currentTime > 3 && reel.videoUrl) {
       setHasViewed(true);
       onViewUpdate(reel.id);
     }
-  }, [isActive, currentTime, hasViewed, onViewUpdate, reel.id]);
+  }, [isActive, currentTime, hasViewed, onViewUpdate, reel.id, reel.videoUrl]);
 
   // Auto play/pause based on active state
   useEffect(() => {
-    if (isActive && autoPlay) {
+    if (reel.videoUrl && isActive && autoPlay) {
       play();
     } else {
       pause();
     }
-  }, [isActive, autoPlay, play, pause]);
+  }, [isActive, autoPlay, play, pause, reel.videoUrl]);
 
   // Handle video end
   useEffect(() => {
-    if (currentTime >= duration && duration > 0) {
+    if (currentTime >= duration && duration > 0 && reel.videoUrl) {
       onVideoEnd();
     }
-  }, [currentTime, duration, onVideoEnd]);
+  }, [currentTime, duration, onVideoEnd, reel.videoUrl]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Handle like action
   const handleLike = async () => {
@@ -221,41 +253,66 @@ export function ReelItem({
   // Progress percentage
   const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  // Check if video URL exists - NO EARLY RETURN, JUST CONDITIONAL RENDERING
+  const hasVideoUrl = Boolean(reel.videoUrl);
+
+  // SINGLE RETURN STATEMENT - NO CONDITIONAL RETURNS
   return (
     <div className="relative h-full w-full bg-black overflow-hidden">
-      {/* Video Player */}
-      <VideoPlayer
-        src={reel.videoUrl}
-        poster={reel.thumbnailUrl}
-        autoPlay={isActive && autoPlay}
-        muted={muted}
-        loop={false}
-        controls={false}
-        onEnded={onVideoEnd}
-        onTimeUpdate={(_time: number) => {
-          // Handle time update if needed
-        }}
-        onLoadedMetadata={(_dur: number) => {
-          // Handle metadata if needed
-        }}
-        className="absolute inset-0 w-full h-full object-cover"
-        onClick={handleVideoTap}
-        onDoubleClick={handleDoubleTap}
-        preload={preloadNext || preloadPrev ? 'metadata' : 'none'}
-      />
+      {!hasVideoUrl ? (
+        // Placeholder for missing video
+        <div className="relative h-full w-full bg-gradient-to-br from-gray-800 to-gray-900 overflow-hidden flex items-center justify-center">
+          <div className="text-center text-white p-8">
+            <div className="text-6xl mb-4">🎬</div>
+            <h3 className="text-xl font-bold mb-2">{reel.title}</h3>
+            <p className="text-gray-300 mb-4">Video not available</p>
+            <p className="text-sm text-gray-400">Celebrity: {reel.celebrity?.name}</p>
+          </div>
+        </div>
+      ) : (
+        // Video content
+        <>
+          {/* Video Player */}
+          <VideoPlayer
+            src={reel.videoUrl}
+            poster={reel.thumbnailUrl}
+            autoPlay={isActive && autoPlay}
+            muted={muted}
+            loop={false}
+            controls={false}
+            onEnded={onVideoEnd}
+            onTimeUpdate={(_time: number) => {
+              // Handle time update if needed
+            }}
+            onLoadedMetadata={(_dur: number) => {
+              // Handle metadata if needed
+            }}
+            className="absolute inset-0 w-full h-full object-cover"
+            onClick={handleVideoTap}
+            onDoubleClick={handleDoubleTap}
+            onError={(error) => {
+              console.error('Video error:', error);
+              console.log('Failed video URL:', reel.videoUrl);
+            }}
+            preload={preloadNext || preloadPrev ? 'metadata' : 'none'}
+          />
 
-      {/* Video overlay gradient */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+          {/* Video overlay gradient */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+        </>
+      )}
 
-      {/* Progress bar */}
-      <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
-        <motion.div
-          className="h-full bg-white"
-          initial={{ width: 0 }}
-          animate={{ width: `${progressPercentage}%` }}
-          transition={{ duration: 0.1 }}
-        />
-      </div>
+      {/* Progress bar - Show only for videos */}
+      {hasVideoUrl && (
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+          <motion.div
+            className="h-full bg-white"
+            initial={{ width: 0 }}
+            animate={{ width: `${progressPercentage}%` }}
+            transition={{ duration: 0.1 }}
+          />
+        </div>
+      )}
 
       {/* Content overlay */}
       <div className="absolute inset-0 flex">

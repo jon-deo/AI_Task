@@ -76,7 +76,7 @@ async function setupS3Bucket() {
     }));
     console.log('✅ CORS configured');
 
-    // Configure bucket policy for authenticated access only
+    // Configure bucket policy for CloudFront and authenticated access
     console.log('🔐 Configuring bucket policy...');
     const bucketPolicy = {
       Version: '2012-10-17',
@@ -98,6 +98,31 @@ async function setupS3Bucket() {
             `arn:aws:s3:::${BUCKET_NAME}/*`,
           ],
         },
+        {
+          Sid: 'AllowCloudFrontServicePrincipal',
+          Effect: 'Allow',
+          Principal: {
+            Service: 'cloudfront.amazonaws.com'
+          },
+          Action: 's3:GetObject',
+          Resource: `arn:aws:s3:::${BUCKET_NAME}/*`,
+          Condition: {
+            StringEquals: {
+              'AWS:SourceAccount': process.env.AWS_ACCOUNT_ID
+            }
+          }
+        },
+        {
+          Sid: 'AllowPublicReadForVideos',
+          Effect: 'Allow',
+          Principal: '*',
+          Action: 's3:GetObject',
+          Resource: [
+            `arn:aws:s3:::${BUCKET_NAME}/videos/*`,
+            `arn:aws:s3:::${BUCKET_NAME}/thumbnails/*`,
+            `arn:aws:s3:::${BUCKET_NAME}/images/*`
+          ]
+        }
       ],
     };
 
@@ -105,7 +130,7 @@ async function setupS3Bucket() {
       Bucket: BUCKET_NAME,
       Policy: JSON.stringify(bucketPolicy),
     }));
-    console.log('✅ Bucket policy configured');
+    console.log('✅ Bucket policy configured for CloudFront and public access');
 
     // Enable versioning
     console.log('📝 Enabling versioning...');
