@@ -162,7 +162,16 @@ export const ReelsContainer = memo(function ReelsContainer({
 
   // Load more reels with safe checks
   useEffect(() => {
+    console.log('Infinite scroll check:', {
+      inView,
+      hasMore,
+      loading,
+      enableInfiniteScroll,
+      reelsLength: reels.length
+    });
+
     if (inView && hasMore && !loading && enableInfiniteScroll && Array.isArray(reels) && reels.length > 0) {
+      console.log('🔄 Loading more reels...');
       loadMore();
     }
   }, [inView, hasMore, loading, loadMore, enableInfiniteScroll, reels]);
@@ -341,9 +350,20 @@ export const ReelsContainer = memo(function ReelsContainer({
         </AnimatePresence>
 
         {/* Loading indicator for infinite scroll */}
-        {enableInfiniteScroll && hasMore && (
+        {enableInfiniteScroll && hasMore && !loading && (
           <div ref={loadMoreRef} className="h-20 flex items-center justify-center">
             <ReelsLoading />
+          </div>
+        )}
+
+        {/* End of content indicator */}
+        {enableInfiniteScroll && !hasMore && reels.length > 0 && (
+          <div className="h-20 flex items-center justify-center">
+            <div className="text-white/60 text-sm text-center">
+              <div className="text-2xl mb-2">🎬</div>
+              <div>You've reached the end!</div>
+              <div className="text-xs mt-1">No more reels to load</div>
+            </div>
           </div>
         )}
       </div>

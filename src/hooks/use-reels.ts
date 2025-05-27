@@ -88,28 +88,42 @@ export function useReels(options: UseReelsOptions = {}): UseReelsReturn {
       const newReels = data.data.items;
       const pagination = data.data.pagination;
 
+      console.log('📊 Pagination data:', {
+        page,
+        newReelsCount: newReels.length,
+        pagination,
+        hasNext: pagination.hasNext
+      });
+
       if (page === 1) {
         // First page - replace all reels
         setAllReels(newReels);
+        console.log('🔄 First page loaded:', newReels.length, 'reels');
       } else {
         // Subsequent pages - append to existing reels
         setAllReels(prev => {
           const existingIds = new Set(prev.map((reel: VideoReelWithDetails) => reel.id));
           const uniqueNewReels = newReels.filter((reel: VideoReelWithDetails) => !existingIds.has(reel.id));
+          console.log('➕ Appending page', page, ':', uniqueNewReels.length, 'new reels');
           return [...prev, ...uniqueNewReels];
         });
       }
 
       setHasMore(pagination.hasNext);
+      console.log('✅ hasMore updated to:', pagination.hasNext);
     }
   }, [data, page]);
 
   // Load more reels
   const loadMore = useCallback(() => {
+    console.log('🔄 loadMore called:', { isLoading, hasMore, currentPage: page });
     if (!isLoading && hasMore) {
+      console.log('📄 Loading page:', page + 1);
       setPage(prev => prev + 1);
+    } else {
+      console.log('❌ Cannot load more:', { isLoading, hasMore });
     }
-  }, [isLoading, hasMore]);
+  }, [isLoading, hasMore, page]);
 
   // Refresh reels
   const refresh = useCallback(() => {
@@ -134,8 +148,8 @@ export function useReels(options: UseReelsOptions = {}): UseReelsReturn {
       }
 
       // Optimistically update the reel
-      setAllReels(prev => prev.map(reel => 
-        reel.id === reelId 
+      setAllReels(prev => prev.map(reel =>
+        reel.id === reelId
           ? { ...reel, likes: reel.likes + BigInt(1) }
           : reel
       ));
@@ -166,8 +180,8 @@ export function useReels(options: UseReelsOptions = {}): UseReelsReturn {
       }
 
       // Optimistically update the reel
-      setAllReels(prev => prev.map(reel => 
-        reel.id === reelId 
+      setAllReels(prev => prev.map(reel =>
+        reel.id === reelId
           ? { ...reel, shares: reel.shares + BigInt(1) }
           : reel
       ));
@@ -199,8 +213,8 @@ export function useReels(options: UseReelsOptions = {}): UseReelsReturn {
       }
 
       // Optimistically update the reel
-      setAllReels(prev => prev.map(reel => 
-        reel.id === reelId 
+      setAllReels(prev => prev.map(reel =>
+        reel.id === reelId
           ? { ...reel, views: reel.views + BigInt(1) }
           : reel
       ));
