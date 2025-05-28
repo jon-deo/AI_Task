@@ -207,6 +207,15 @@ export function createRateLimitMiddleware(config: RateLimitConfig) {
   const rateLimiter = new RateLimiter();
 
   return async (request: NextRequest) => {
+    // Skip rate limiting during build
+    if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'phase-production-build') {
+      return {
+        allowed: true,
+        headers: {},
+        retryAfter: undefined,
+      };
+    }
+
     const result = await rateLimiter.checkLimit(request, config);
 
     return {

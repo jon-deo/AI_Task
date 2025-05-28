@@ -52,7 +52,6 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const headersList = headers();
   try {
     // Apply rate limiting
     const rateLimitResult = await rateLimitMiddleware(request);
