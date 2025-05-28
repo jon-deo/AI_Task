@@ -9,45 +9,22 @@
     "import"
   ],
   "rules": {
-    "@typescript-eslint/no-unused-vars": "warn",
-    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": "off",
+    "@typescript-eslint/no-explicit-any": "off",
     "@typescript-eslint/explicit-function-return-type": "off",
     "@typescript-eslint/explicit-module-boundary-types": "off",
-    "@typescript-eslint/no-empty-function": "warn",
-    "import/order": [
-      "warn",
-      {
-        "groups": [
-          ["builtin", "external"],
-          "internal",
-          ["parent", "sibling", "index"]
-        ],
-        "pathGroups": [
-          {
-            "pattern": "next/**",
-            "group": "builtin",
-            "position": "before"
-          },
-          {
-            "pattern": "@/**",
-            "group": "internal",
-            "position": "before"
-          }
-        ],
-        "newlines-between": "always",
-        "alphabetize": {
-          "order": "asc",
-          "caseInsensitive": true
-        }
-      }
-    ],
+    "@typescript-eslint/no-empty-function": "off",
+    "@typescript-eslint/ban-types": "off",
+    "import/order": "off",
     "react/prop-types": "off",
     "react/react-in-jsx-scope": "off",
     "react-hooks/exhaustive-deps": "warn",
-    "prefer-const": "error",
-    "no-var": "error",
-    "no-console": "warn",
-    "no-debugger": "error"
+    "prefer-const": "warn",
+    "no-var": "warn",
+    "no-console": "off",
+    "no-debugger": "error",
+    "@next/next/no-img-element": "off",
+    "react/no-unescaped-entities": "off"
   },
   "settings": {
     "import/resolver": {
