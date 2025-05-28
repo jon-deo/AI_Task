@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiting';
@@ -19,10 +20,13 @@ const rateLimitMiddleware = createRateLimitMiddleware({
   maxRequests: 100, // Stricter limit for analytics
 });
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/analytics - Get analytics data (Admin only)
  */
 export async function GET(request: NextRequest) {
+  const headersList = headers();
   try {
     // Apply rate limiting
     const rateLimitResult = await rateLimitMiddleware(request);
