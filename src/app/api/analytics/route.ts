@@ -28,10 +28,30 @@ export const runtime = 'nodejs';
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
 
+// Check if we're in a build environment
+const isBuildEnvironment = process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'phase-production-build';
+
 /**
  * GET /api/analytics - Get analytics data (Admin only)
  */
 export async function GET(request: NextRequest) {
+  // Return empty data during build
+  if (isBuildEnvironment) {
+    return NextResponse.json({
+      success: true,
+      data: {
+        overview: {
+          totals: { reels: 0, celebrities: 0, users: 0 },
+          period: { views: 0, likes: 0, shares: 0 },
+          topSports: [],
+          recentReels: []
+        },
+        period: '7d',
+        generatedAt: new Date().toISOString()
+      }
+    });
+  }
+
   const headersList = headers();
   try {
     // Apply rate limiting
