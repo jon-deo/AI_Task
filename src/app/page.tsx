@@ -14,8 +14,12 @@ export default function Home() {
     fetch('/api/reels')
       .then(res => res.json())
       .then(data => {
-        // Support both data.data.items and data.data.reels for compatibility
-        const reels = data?.data?.items || data?.data?.reels || data?.reels || [];
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to load reels');
+        }
+        // The reels are in data.data.data
+        const reels = data.data?.data || [];
+        console.log('Fetched reels:', reels); // Debug log
         setInitialReels(reels);
       })
       .catch(error => {

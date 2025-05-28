@@ -1,11 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+
+interface Celebrity {
+  id: string;
+  name: string;
+  sport: string;
+}
 
 export default function CreateReel() {
   const router = useRouter();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [celebrities, setCelebrities] = useState<Celebrity[]>([]);
   const [formData, setFormData] = useState({
     celebrity: '',
     duration: 30,
@@ -13,6 +20,23 @@ export default function CreateReel() {
     quality: '1080p',
     includeSubtitles: true
   });
+
+  // Fetch celebrities on component mount
+  useEffect(() => {
+    const fetchCelebrities = async () => {
+      try {
+        const response = await fetch('/api/celebrities');
+        const data = await response.json();
+        if (data.success) {
+          setCelebrities(data.data.items || []);
+        }
+      } catch (error) {
+        console.error('Error fetching celebrities:', error);
+      }
+    };
+
+    fetchCelebrities();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,9 +82,11 @@ export default function CreateReel() {
               required
             >
               <option value="">Select a celebrity</option>
-              <option value="michael-jordan">Michael Jordan</option>
-              <option value="lebron-james">LeBron James</option>
-              <option value="lionel-messi">Lionel Messi</option>
+              {celebrities.map((celebrity) => (
+                <option key={celebrity.id} value={celebrity.name}>
+                  {celebrity.name} ({celebrity.sport})
+                </option>
+              ))}
             </select>
           </div>
 

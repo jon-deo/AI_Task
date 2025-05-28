@@ -31,7 +31,7 @@ export function SimpleReelItem({
   const hasVideoUrl = Boolean(reel.videoUrl);
 
   // Simple state for mute/unmute
-  const [isMuted, setIsMuted] = React.useState(true);
+  const [isMuted, setIsMuted] = React.useState(false);
   const [isVideoLoaded, setIsVideoLoaded] = React.useState(false);
   const [videoError, setVideoError] = React.useState<string | null>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -115,12 +115,12 @@ export function SimpleReelItem({
             onClick={handleVideoClick}
             onEnded={onVideoEnd}
             onLoadedData={() => {
-              console.log('Video loaded:', reel.title.slice(0, 20));
+              console.log('Video loaded:', reel.title.slice(0, 20), 'URL:', reel.videoUrl);
               setIsVideoLoaded(true);
               setVideoError(null);
             }}
             onCanPlay={() => {
-              console.log('Video can play:', reel.title.slice(0, 20));
+              console.log('Video can play:', reel.title.slice(0, 20), 'URL:', reel.videoUrl);
               // Try to play if this reel is active
               if (isActive && autoPlay && videoRef.current) {
                 videoRef.current.play().catch(error => {
@@ -136,7 +136,7 @@ export function SimpleReelItem({
               setIsVideoLoaded(false);
             }}
             onLoadStart={() => {
-              console.log('Video load started:', reel.title.slice(0, 20));
+              console.log('Video load started:', reel.title.slice(0, 20), 'URL:', reel.videoUrl);
               setIsVideoLoaded(false);
               setVideoError(null);
             }}
@@ -249,7 +249,6 @@ export function SimpleReelItem({
         {videoError && (
           <div className="text-red-400">Error: {videoError.slice(0, 30)}...</div>
         )}
-        <div>Status: {reel.status || 'Unknown'}</div>
         <div>Audio: {isMuted ? 'Muted' : 'Unmuted'}</div>
         <div>Title: {reel.title.slice(0, 20)}...</div>
         <div className="mt-1 text-green-400">

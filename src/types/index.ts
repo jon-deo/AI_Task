@@ -121,7 +121,32 @@ export interface UserCelebrityLike {}
 export interface VideoComment {}
 export interface VideoAnalytics {}
 export interface SystemAnalytics {}
-export interface GenerationJob {}
+export interface GenerationJob {
+  id: string;
+  celebrityId: string;
+  status: GenerationStatus;
+  prompt?: string;
+  voiceType?: VoiceType;
+  duration?: number;
+  scriptGenerated: boolean;
+  voiceGenerated: boolean;
+  videoGenerated: boolean;
+  generatedScript?: string;
+  generatedTitle?: string;
+  generatedVideoUrl?: string;
+  errorMessage?: string;
+  retryCount: number;
+  totalCost: number;
+  startedAt?: Date;
+  completedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  celebrity?: {
+    id: string;
+    name: string;
+    sport: Sport;
+  };
+}
 export interface Prisma {}
 
 // Extended types with relations

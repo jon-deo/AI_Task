@@ -160,21 +160,24 @@ export const ReelsContainer = memo(function ReelsContainer({
     };
   }, [currentIndex, reels]);
 
-  // Load more reels with safe checks
+  // Preload adjacent videos
   useEffect(() => {
-    console.log('Infinite scroll check:', {
-      inView,
-      hasMore,
-      loading,
-      enableInfiniteScroll,
-      reelsLength: reels.length
-    });
+    preloadAdjacentVideos(currentIndex);
+  }, [currentIndex, preloadAdjacentVideos]);
 
-    if (inView && hasMore && !loading && enableInfiniteScroll && Array.isArray(reels) && reels.length > 0) {
-      console.log('🔄 Loading more reels...');
+  // Load more reels when reaching the end
+  useEffect(() => {
+    if (inView && hasMore && !loading) {
       loadMore();
     }
-  }, [inView, hasMore, loading, loadMore, enableInfiniteScroll, reels]);
+  }, [inView, hasMore, loading, loadMore]);
+
+  // Debug log for reels
+  useEffect(() => {
+    console.log('Current reels:', reels);
+    console.log('Visible reels:', visibleReels);
+    console.log('Current index:', currentIndex);
+  }, [reels, visibleReels, currentIndex]);
 
   // Handle keyboard navigation with safe checks
   useEffect(() => {
@@ -270,7 +273,7 @@ export const ReelsContainer = memo(function ReelsContainer({
               >
                 Refresh Page
               </button>
-              {onGenerate && (
+              {typeof onGenerate === 'function' && (
                 <button
                   onClick={() => handleGenerateVideo('Michael Jordan')}
                   disabled={isGenerating}

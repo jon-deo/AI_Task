@@ -11,13 +11,13 @@ import { SimpleVideoComposer } from '@/services/simple-video-composer';
 import { AIScriptGenerationService } from '@/services/ai-script-generation';
 import { SpeechSynthesisService } from '@/services/speech-synthesis';
 import { S3Service } from '@/services/s3';
-import { VoiceType } from '@/types';
+import { VoiceType, type GenerationJob } from '@/types';
 
 // Request validation schema
 const generateVideoRequestSchema = z.object({
   celebrityId: z.string().min(1),
   duration: z.number().min(15).max(120),
-  voiceType: z.enum(['MALE_NARRATOR', 'FEMALE_NARRATOR', 'SPORTS_COMMENTATOR', 'DOCUMENTARY_STYLE', 'ENERGETIC_HOST', 'CALM_NARRATOR']).optional(),
+  voiceType: z.nativeEnum(VoiceType).optional(),
   voiceRegion: z.enum(['US', 'UK', 'AU']).optional(),
   customPrompt: z.string().optional(),
   imageUrls: z.array(z.string().url()).optional(),
@@ -56,29 +56,19 @@ function checkRateLimit(clientId: string): boolean {
  */
 async function generateRealVideo(celebrityName: string) {
   try {
-    // Create mock celebrity object with all required properties
-    const mockCelebrity = {
-      id: `mock-${Date.now()}`,
-      name: celebrityName,
-      slug: celebrityName.toLowerCase().replace(/\s+/g, '-'),
-      sport: 'BASKETBALL' as const,
-      imageUrl: null,
-      biography: `Professional ${celebrityName} is a legendary athlete known for their exceptional skills and achievements.`,
-      achievements: ['Professional Athlete', 'Sports Legend', 'Hall of Fame Candidate'],
-      birthDate: new Date('1980-01-01'),
-      nationality: 'USA',
-      isActive: true,
-      totalViews: BigInt(0),
-      totalLikes: BigInt(0),
-      totalShares: BigInt(0),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    // Get celebrity from database
+    const celebrity = await prisma.celebrity.findFirst({
+      where: { name: celebrityName },
+    });
+
+    if (!celebrity) {
+      throw new Error('Celebrity not found');
+    }
 
     // Step 1: Generate AI script
     console.log('📝 Generating AI script...');
     const scriptResult = await AIScriptGenerationService.generateScript({
-      celebrity: mockCelebrity,
+      celebrity,
       duration: 30,
       voiceType: VoiceType.MALE_NARRATOR,
       customPrompt: '',
@@ -356,7 +346,13 @@ export async function POST(req: Request) {
     }
 
     // Get celebrity from database
-    const celebrity = await CelebrityService.getCelebrityById(validatedData.celebrityId);
+    const celebrity = await prisma.celebrity.findUnique({
+      where: { id: validatedData.celebrityId },
+      include: {
+        videoReels: true,
+      },
+    });
+
     if (!celebrity) {
       return NextResponse.json(
         { success: false, error: 'Celebrity not found' },
@@ -378,10 +374,7 @@ export async function POST(req: Request) {
 
     if (validatedData.useQueue) {
       // Add to queue for background processing
-      const jobId = await videoGenerationQueue.addJob(request, {
-        priority: validatedData.priority || 3,
-        maxAttempts: 3,
-      });
+      const jobId = await videoGenerationQueue.addJob(request, validatedData.priority || 3);
 
       return NextResponse.json({
         success: true,
@@ -459,7 +452,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Check database for completed/failed jobs
-    const dbJob = await VideoGenerationService.getJobStatus(jobId);
+    const dbJob = await prisma.generationJob.findUnique({
+      where: { id: jobId },
+      include: {
+        celebrity: {
+          select: {
+            id: true,
+            name: true,
+            sport: true,
+          },
+        },
+      },
+    });
+
     if (dbJob) {
       return NextResponse.json({
         success: true,
