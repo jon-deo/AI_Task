@@ -19,7 +19,7 @@
     "react/prop-types": "off",
     "react/react-in-jsx-scope": "off",
     "react-hooks/exhaustive-deps": "warn",
-    "prefer-const": "warn",
+    "prefer-const": "off",
     "no-var": "warn",
     "no-console": "off",
     "no-debugger": "error",
