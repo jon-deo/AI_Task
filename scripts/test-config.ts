@@ -1,7 +1,28 @@
 #!/usr/bin/env tsx
 
-import { config, validateConfig } from '../src/config';
+import { config } from '../src/config';
 import { checkAWSHealth } from '../src/lib/aws-config';
+
+interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+function validateConfig(): ValidationResult {
+  const errors: string[] = [];
+  
+  // Check required environment variables
+  if (!config.aws.accessKeyId) errors.push('AWS_ACCESS_KEY_ID is required');
+  if (!config.aws.secretAccessKey) errors.push('AWS_SECRET_ACCESS_KEY is required');
+  if (!config.aws.region) errors.push('AWS_REGION is required');
+  if (!config.aws.s3Bucket) errors.push('AWS_S3_BUCKET is required');
+  if (!config.openai.apiKey) errors.push('OPENAI_API_KEY is required');
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
 
 async function testConfiguration() {
   console.log('🧪 Testing application configuration...\n');
@@ -14,16 +35,14 @@ async function testConfiguration() {
     console.log('✅ Configuration is valid');
   } else {
     console.log('❌ Configuration validation failed:');
-    validation.errors.forEach(error => console.log(`   - ${error}`));
+    validation.errors.forEach((error: string) => console.log(`   - ${error}`));
   }
 
   // Test 2: Environment check
   console.log('\n2. Environment information:');
-  console.log(`   - Environment: ${config.app.environment}`);
-  console.log(`   - Port: ${config.app.port}`);
-  console.log(`   - Base URL: ${config.app.baseUrl}`);
+  console.log(`   - Environment: ${config.nodeEnv}`);
   console.log(`   - AWS Region: ${config.aws.region}`);
-  console.log(`   - S3 Bucket: ${config.aws.s3.bucketName}`);
+  console.log(`   - S3 Bucket: ${config.aws.s3Bucket}`);
 
   // Test 3: AWS credentials check
   console.log('\n3. AWS credentials check:');
@@ -34,7 +53,6 @@ async function testConfiguration() {
   // Test 4: OpenAI credentials check
   console.log('\n4. OpenAI credentials check:');
   console.log(`   - OpenAI API Key: ${config.openai.apiKey ? '✅ Set' : '❌ Missing'}`);
-  console.log(`   - OpenAI Org ID: ${config.openai.organizationId ? '✅ Set' : '❌ Missing'}`);
 
   // Test 5: AWS health check (if credentials are available)
   if (hasAwsCredentials) {
@@ -46,7 +64,7 @@ async function testConfiguration() {
       
       if (awsHealth.errors.length > 0) {
         console.log('   - Errors:');
-        awsHealth.errors.forEach(error => console.log(`     - ${error}`));
+        awsHealth.errors.forEach((error: string) => console.log(`     - ${error}`));
       }
     } catch (error) {
       console.log(`   - ❌ AWS health check failed: ${error}`);
@@ -81,4 +99,4 @@ if (require.main === module) {
   testConfiguration().catch(console.error);
 }
 
-export { testConfiguration };
+export { testConfiguration, validateConfig };

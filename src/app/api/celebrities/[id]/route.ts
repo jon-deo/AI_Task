@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiting';
@@ -85,8 +86,8 @@ export async function GET(
         isActive: true,
       },
       include: {
-        reels: {
-          where: { isPublished: true },
+        videoReels: {
+          where: { publishedAt: { not: null } },
           select: {
             id: true,
             title: true,
@@ -101,10 +102,10 @@ export async function GET(
         },
         _count: {
           select: {
-            reels: {
-              where: { isPublished: true },
+            videoReels: {
+              where: { publishedAt: { not: null } },
             },
-          },
+          } as Prisma.CelebrityCountOutputTypeSelect,
         },
       },
     });
@@ -122,12 +123,18 @@ export async function GET(
     // Transform the response
     const responseData = {
       ...celebrity,
-      reelsCount: celebrity._count.reels,
+      reelsCount: (celebrity as any)._count?.videoReels || 0,
+      reels: (celebrity as any).videoReels,
       _count: undefined,
+      videoReels: undefined,
     };
 
     // Cache the result
-    await cacheManager.set(cacheKey, responseData, CACHE_CONFIGS.CELEBRITY);
+    await cacheManager.set(cacheKey, responseData, {
+      ...CACHE_CONFIGS.CELEBRITY,
+      tags: [...CACHE_CONFIGS.CELEBRITY.tags],
+      vary: [...CACHE_CONFIGS.CELEBRITY.vary],
+    });
 
     // Increment view count asynchronously
     prisma.celebrity.update({
@@ -336,7 +343,9 @@ export async function DELETE(
       where: { id },
       include: {
         _count: {
-          select: { reels: true },
+          select: { 
+            videoReels: true 
+          } as Prisma.CelebrityCountOutputTypeSelect,
         },
       },
     });
@@ -352,7 +361,7 @@ export async function DELETE(
     }
 
     // Check if celebrity has reels (soft delete instead)
-    if (celebrity._count.reels > 0) {
+    if ((celebrity as any)._count?.videoReels > 0) {
       // Soft delete by setting isActive to false
       await prisma.celebrity.update({
         where: { id },

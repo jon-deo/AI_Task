@@ -5,9 +5,10 @@ import { SpeechSynthesisService, type SpeechSynthesisRequest } from './speech-sy
 import { VideoComposer } from './video-composer';
 import { ImageGenerator } from './image-generator';
 import { S3Service } from './s3';
-import type { Celebrity, GenerationJob } from '@/types';
+import type { Celebrity } from '@/types';
 import { VoiceType } from '@/types';
 import { prisma } from '@/lib/prisma';
+import type { GenerationJob, GenerationStatus } from '@prisma/client';
 
 export interface VideoGenerationRequest {
   celebrity: Celebrity;
@@ -523,7 +524,7 @@ export class VideoGenerationService {
         audioBuffer,
         images,
         duration,
-        resolution: resolution as '720p' | '1080p' | '480p',
+        resolution: resolution as '480p' | '720p' | '1080p',
         script,
         includeSubtitles: includeSubtitles || false,
         fps: 30,
@@ -693,7 +694,7 @@ export class VideoGenerationService {
     await prisma.generationJob.update({
       where: { id: jobId },
       data: {
-        status: 'CANCELLED',
+        status: 'CANCELLED' as GenerationStatus,
         completedAt: new Date(),
       },
     });

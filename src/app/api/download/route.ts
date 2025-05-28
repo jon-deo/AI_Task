@@ -5,6 +5,14 @@ import { S3Service } from '@/services/s3';
 import { CloudFrontService } from '@/services/cloudfront';
 import { S3_CONFIG } from '@/lib/aws-config';
 
+interface S3FileData {
+  body: Buffer;
+  contentType: string;
+  contentLength: number;
+  lastModified: Date;
+  metadata: Record<string, string>;
+}
+
 // Request validation schema
 const downloadRequestSchema = z.object({
   key: z.string().min(1),
@@ -136,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Download file from S3
-    const fileData = await S3Service.downloadFile(key);
+    const fileData = (await S3Service.downloadFile(key)) as unknown as S3FileData;
 
     // Set appropriate headers
     const headers = new Headers();

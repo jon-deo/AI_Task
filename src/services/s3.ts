@@ -54,6 +54,8 @@ export interface PresignedUrlOptions {
 export interface MultipartUploadOptions extends S3UploadOptions {
   partSize?: number;
   maxConcurrency?: number;
+  cacheControl?: string;
+  acl?: string;
 }
 
 export interface S3ListResult {
@@ -368,8 +370,8 @@ export class S3Service {
     buffer: Buffer,
     options: MultipartUploadOptions
   ): Promise<S3UploadResult> {
-    const key = generateS3Key(options.folder, options.filename, options.prefix);
-    const contentType = options.contentType || getContentType(options.filename);
+    const key = generateS3Key(options.folder || 'TEMP', options.filename || `file_${Date.now()}`, options.prefix);
+    const contentType = options.contentType || getContentType(options.filename || '');
     const partSize = options.partSize || 5 * 1024 * 1024; // 5MB default
     const maxConcurrency = options.maxConcurrency || 3;
 
@@ -382,8 +384,8 @@ export class S3Service {
         Key: key,
         ContentType: contentType,
         Metadata: options.metadata,
-        CacheControl: options.cacheControl || this.getDefaultCacheControl(options.folder),
-        ACL: options.acl || 'public-read',
+        CacheControl: options.cacheControl || this.getDefaultCacheControl(options.folder || 'TEMP'),
+        ACL: options.acl as any || 'public-read',
         ServerSideEncryption: 'AES256',
       });
 

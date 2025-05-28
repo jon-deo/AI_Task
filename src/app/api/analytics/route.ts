@@ -14,7 +14,10 @@ const analyticsSchema = z.object({
 });
 
 // Rate limiting middleware (stricter for analytics)
-const rateLimitMiddleware = createRateLimitMiddleware(RATE_LIMITS.ANALYTICS);
+const rateLimitMiddleware = createRateLimitMiddleware({
+  ...RATE_LIMITS.ADMIN,
+  maxRequests: 100, // Stricter limit for analytics
+});
 
 /**
  * GET /api/analytics - Get analytics data (Admin only)
@@ -310,7 +313,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Cache the result
-    await cacheManager.set(cacheKey, analyticsData, CACHE_CONFIGS.ANALYTICS);
+    await cacheManager.set(cacheKey, analyticsData, {
+      ...CACHE_CONFIGS.ANALYTICS,
+      tags: [...CACHE_CONFIGS.ANALYTICS.tags], // Convert readonly array to mutable
+    });
 
     // Return response with cache headers
     const response = NextResponse.json({

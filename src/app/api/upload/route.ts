@@ -193,12 +193,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Generate presigned URL
-    const result = await S3Service.generatePresignedUploadUrl({
-      folder: validatedParams.folder,
-      filename: validatedParams.filename,
-      contentType: validatedParams.contentType,
-      expiresIn: 3600, // 1 hour
-    });
+    const result = await S3Service.generatePresignedUploadUrl(
+      validatedParams.folder,
+      validatedParams.filename,
+      3600 // expiresIn as number
+    ) as unknown as { uploadUrl: string; key: string; fields: Record<string, string> };
 
     return NextResponse.json({
       success: true,

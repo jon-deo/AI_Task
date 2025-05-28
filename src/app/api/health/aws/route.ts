@@ -4,6 +4,14 @@ import { checkAWSHealth } from '@/lib/aws-config';
 import { S3Service } from '@/services/s3';
 import { CloudFrontService } from '@/services/cloudfront';
 
+interface S3FileData {
+  body: Buffer;
+  contentType: string;
+  contentLength: number;
+  lastModified: Date;
+  metadata: Record<string, string>;
+}
+
 /**
  * GET /api/health/aws - Check AWS services health
  */
@@ -176,7 +184,7 @@ export async function POST(request: NextRequest) {
     if (includeDownloadTest && testKey) {
       try {
         const startTime = Date.now();
-        const downloadResult = await S3Service.downloadFile(testKey);
+        const downloadResult = await S3Service.downloadFile(testKey) as unknown as S3FileData;
         results.tests.download = {
           status: 'passed',
           duration: Date.now() - startTime,

@@ -1,8 +1,15 @@
 import { openai, AI_CONFIG, PROMPT_TEMPLATES, handleOpenAIError, validateScriptContent, calculateTargetWords } from '@/lib/openai-config';
-import type { Celebrity, VoiceType } from '@/types';
+import { VoiceType } from '@/types';
+import type { Celebrity } from '@/types';
+
+// Update Celebrity interface to include optional fields
+interface ExtendedCelebrity extends Celebrity {
+  position?: string | null;
+  team?: string | null;
+}
 
 export interface ScriptGenerationRequest {
-  celebrity: Celebrity;
+  celebrity: ExtendedCelebrity;
   duration: number; // in seconds
   voiceType?: VoiceType;
   customPrompt?: string;
@@ -85,7 +92,7 @@ export class AIScriptGenerationService {
           wordCount: validation.wordCount,
           estimatedDuration: validation.estimatedDuration,
           targetDuration: request.duration,
-          voiceType: request.voiceType || 'MALE_NARRATOR',
+          voiceType: request.voiceType ?? VoiceType.MALE_NARRATOR,
           generationTime: Date.now() - startTime,
           model,
           tokensUsed: this.estimateTokensUsed(script, title, description, hashtags),
@@ -110,12 +117,12 @@ export class AIScriptGenerationService {
     const targetWords = calculateTargetWords(duration);
 
     // Build context for the prompt
-    const context = {
+    const context: Record<string, string> = {
       celebrityName: celebrity.name,
       sport: celebrity.sport,
-      position: celebrity.position || 'Player',
-      team: celebrity.team || 'Various teams',
-      nationality: celebrity.nationality,
+      position: celebrity.position ?? 'Player',
+      team: celebrity.team ?? 'Various teams',
+      nationality: celebrity.nationality ?? 'Unknown',
       biography: celebrity.biography,
       achievements: celebrity.achievements.join(', '),
       duration: duration.toString(),
@@ -138,7 +145,7 @@ export class AIScriptGenerationService {
     for (let attempt = 1; attempt <= options.maxRetries; attempt++) {
       try {
         const response = await openai.chat.completions.create({
-          model: 'gpt-3.5-turbo',
+          model: options.model,
           messages: [
             {
               role: 'system',
@@ -146,11 +153,11 @@ export class AIScriptGenerationService {
             },
             {
               role: 'user',
-              content: `Generate a script about ${celebrity.name} (${celebrity.nationality}, ${celebrity.sport}). Key points to include: ${celebrity.achievements.join(', ')}. Biography: ${celebrity.biography}`,
+              content: prompt,
             },
           ],
-          temperature: 0.7,
-          max_tokens: 500,
+          temperature: options.temperature,
+          max_tokens: targetWords * 2, // Estimate tokens based on target word count
         });
 
         const script = response.choices[0]?.message?.content?.trim();

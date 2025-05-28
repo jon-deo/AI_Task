@@ -290,7 +290,7 @@ export function ReelItem({
             className="absolute inset-0 w-full h-full object-cover"
             onClick={handleVideoTap}
             onDoubleClick={handleDoubleTap}
-            onError={(error) => {
+            onError={(error :any) => {
               console.error('Video error:', error);
               console.log('Failed video URL:', reel.videoUrl);
             }}

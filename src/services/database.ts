@@ -185,7 +185,7 @@ export class VideoReelService {
             select: {
               userLikes: true,
               userShares: true,
-              comments: true,
+              userViews: true,
             },
           },
         },
@@ -215,7 +215,6 @@ export class VideoReelService {
             userLikes: true,
             userShares: true,
             userViews: true,
-            comments: true,
           },
         },
       },

@@ -356,7 +356,7 @@ export function withCache<T>(
     const ifNoneMatch = request.headers.get('if-none-match');
 
     // Try to get from cache
-    const cached = await cacheManager.store.get(cacheKey);
+    const cached = await cacheManager.get<CacheEntry>(cacheKey);
 
     if (cached) {
       // Check ETag for conditional requests
@@ -427,7 +427,7 @@ export const cacheInvalidation = {
     cacheManager.invalidateByTag('analytics');
   },
 
-  all: () => {
-    cacheManager.store.clear();
+  all: async () => {
+    await cacheManager.delete('*'); // Clear all cache entries
   },
 };

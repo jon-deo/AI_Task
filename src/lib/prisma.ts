@@ -9,7 +9,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: config.isDev ? ['query', 'error', 'warn'] : ['error'],
+  log: config.nodeEnv === 'development' ? ['query', 'error', 'warn'] : ['error'],
   datasources: {
     db: {
       url: config.database.url,
@@ -17,7 +17,7 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   },
 });
 
-if (config.isDev) globalForPrisma.prisma = prisma;
+if (config.nodeEnv === 'development') globalForPrisma.prisma = prisma;
 
 // Database connection helper
 export async function connectToDatabase() {
@@ -58,7 +58,7 @@ export async function checkDatabaseHealth() {
 
 // Database transaction helper
 export async function withTransaction<T>(
-  callback: (tx: PrismaClient) => Promise<T>
+  callback: (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>
 ): Promise<T> {
   return await prisma.$transaction(callback);
 }
@@ -190,7 +190,7 @@ export async function logSlowQuery(
     console.warn(`🐌 Slow query detected (${duration}ms):`, query);
     
     // In production, you might want to send this to a monitoring service
-    if (config.isProd) {
+    if (config.nodeEnv === 'production') {
       // await sendToMonitoringService({ query, duration, timestamp: new Date() });
     }
   }

@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Sport, VideoStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -18,27 +18,30 @@ async function createTestReels() {
       const testCelebrities = [
         {
           name: 'Michael Jordan',
-          sport: 'Basketball',
+          sport: Sport.BASKETBALL,
           nationality: 'American',
           imageUrl: 'https://d2mrk9810fr0rz.cloudfront.net/images/jordan.jpg',
           slug: 'michael-jordan',
           isVerified: true,
+          biography: 'Michael Jordan is widely considered the greatest basketball player of all time. He led the Chicago Bulls to six NBA championships and won five MVP awards during his illustrious career.',
         },
         {
           name: 'Lionel Messi',
-          sport: 'Football',
+          sport: Sport.FOOTBALL,
           nationality: 'Argentinian',
           imageUrl: 'https://d2mrk9810fr0rz.cloudfront.net/images/messi.jpg',
           slug: 'lionel-messi',
           isVerified: true,
+          biography: 'Lionel Messi is an Argentine professional footballer who plays as a forward. He is widely regarded as one of the greatest players of all time, having won numerous awards including multiple Ballon d\'Or titles.',
         },
         {
           name: 'Serena Williams',
-          sport: 'Tennis',
+          sport: Sport.TENNIS,
           nationality: 'American',
           imageUrl: 'https://d2mrk9810fr0rz.cloudfront.net/images/serena.jpg',
           slug: 'serena-williams',
           isVerified: true,
+          biography: 'Serena Williams is an American professional tennis player who has won 23 Grand Slam singles titles, the most by any player in the Open Era, and the second-most of all time.',
         },
       ];
 
@@ -94,7 +97,7 @@ async function createTestReels() {
       {
         title: "Jordan's Greatest Moments",
         description: "Relive the legendary basketball moments of Michael Jordan",
-        celebrityId: celebrities[0]?.id || celebrities.find(c => c.name.includes('Jordan'))?.id,
+        celebrityId: celebrities.find(c => c.name.includes('Jordan'))?.id || celebrities[0].id,
         videoUrl: 'https://d2mrk9810fr0rz.cloudfront.net/videos/sample-basketball.mp4',
         thumbnailUrl: 'https://d2mrk9810fr0rz.cloudfront.net/thumbnails/sample-basketball.jpg',
         duration: 45,
@@ -110,7 +113,7 @@ async function createTestReels() {
         resolution: '1080p',
         bitrate: '2000',
         format: 'mp4',
-        status: 'COMPLETED',
+        status: VideoStatus.COMPLETED,
         s3Key: 'videos/sample-basketball.mp4',
         s3Bucket: 'essentially-sports-task',
         tags: ['basketball', 'legend', 'nba'],
@@ -118,7 +121,7 @@ async function createTestReels() {
       {
         title: "Messi's Magic on the Field",
         description: "Watch Lionel Messi's most incredible football moments",
-        celebrityId: celebrities[1]?.id || celebrities.find(c => c.name.includes('Messi'))?.id,
+        celebrityId: celebrities.find(c => c.name.includes('Messi'))?.id || celebrities[0].id,
         videoUrl: 'https://d2mrk9810fr0rz.cloudfront.net/videos/sample-football.mp4',
         thumbnailUrl: 'https://d2mrk9810fr0rz.cloudfront.net/thumbnails/sample-football.jpg',
         duration: 38,
@@ -134,7 +137,7 @@ async function createTestReels() {
         resolution: '1080p',
         bitrate: '2000',
         format: 'mp4',
-        status: 'COMPLETED',
+        status: VideoStatus.COMPLETED,
         s3Key: 'videos/sample-football.mp4',
         s3Bucket: 'essentially-sports-task',
         tags: ['football', 'soccer', 'goat'],
@@ -142,7 +145,7 @@ async function createTestReels() {
       {
         title: "Serena's Tennis Dominance",
         description: "The unstoppable force of Serena Williams in tennis",
-        celebrityId: celebrities[2]?.id || celebrities.find(c => c.name.includes('Serena'))?.id || celebrities[0]?.id,
+        celebrityId: celebrities.find(c => c.name.includes('Serena'))?.id || celebrities[0].id,
         videoUrl: 'https://d2mrk9810fr0rz.cloudfront.net/videos/sample-tennis.mp4',
         thumbnailUrl: 'https://d2mrk9810fr0rz.cloudfront.net/thumbnails/sample-tennis.jpg',
         duration: 42,
@@ -158,7 +161,7 @@ async function createTestReels() {
         resolution: '1080p',
         bitrate: '2000',
         format: 'mp4',
-        status: 'COMPLETED',
+        status: VideoStatus.COMPLETED,
         s3Key: 'videos/sample-tennis.mp4',
         s3Bucket: 'essentially-sports-task',
         tags: ['tennis', 'champion', 'wimbledon'],

@@ -61,8 +61,11 @@ export class VideoProcessingService {
           processedAt: new Date().toISOString(),
           compressionLevel: options.compressionLevel || 'medium',
         },
-        cacheControl: 'public, max-age=31536000, immutable',
       });
+
+      const videoCloudFrontUrl = S3_CONFIG.CLOUDFRONT.DOMAIN 
+        ? `https://${S3_CONFIG.CLOUDFRONT.DOMAIN}/${videoUploadResult.key}`
+        : videoUploadResult.url;
 
       // Extract video metadata (simplified - in production use ffprobe)
       const metadata = await this.extractVideoMetadata(videoBuffer);
@@ -93,7 +96,7 @@ export class VideoProcessingService {
       return {
         videoKey: videoUploadResult.key,
         videoUrl: videoUploadResult.url,
-        videoCloudFrontUrl: videoUploadResult.cloudFrontUrl,
+        videoCloudFrontUrl,
         thumbnailKey,
         thumbnailUrl,
         thumbnailCloudFrontUrl,
@@ -143,13 +146,16 @@ export class VideoProcessingService {
           timestamp: (options.timestamp || 0).toString(),
           generatedAt: new Date().toISOString(),
         },
-        cacheControl: 'public, max-age=2592000',
       });
+
+      const cloudFrontUrl = S3_CONFIG.CLOUDFRONT.DOMAIN 
+        ? `https://${S3_CONFIG.CLOUDFRONT.DOMAIN}/${uploadResult.key}`
+        : uploadResult.url;
 
       return {
         key: uploadResult.key,
         url: uploadResult.url,
-        cloudFrontUrl: uploadResult.cloudFrontUrl,
+        cloudFrontUrl,
       };
     } catch (error) {
       console.error('Thumbnail generation failed:', error);
@@ -244,10 +250,14 @@ export class VideoProcessingService {
         },
       });
 
+      const cloudFrontUrl = S3_CONFIG.CLOUDFRONT.DOMAIN 
+        ? `https://${S3_CONFIG.CLOUDFRONT.DOMAIN}/${uploadResult.key}`
+        : uploadResult.url;
+
       results.push({
         key: uploadResult.key,
         url: uploadResult.url,
-        cloudFrontUrl: uploadResult.cloudFrontUrl,
+        cloudFrontUrl,
         size: `${size.width}x${size.height}`,
       });
     }
@@ -321,6 +331,10 @@ export class VideoProcessingService {
         },
       });
 
+      const cloudFrontUrl = S3_CONFIG.CLOUDFRONT.DOMAIN 
+        ? `https://${S3_CONFIG.CLOUDFRONT.DOMAIN}/${uploadResult.key}`
+        : uploadResult.url;
+
       let webpKey: string | undefined;
       let webpUrl: string | undefined;
       let webpCloudFrontUrl: string | undefined;
@@ -351,13 +365,15 @@ export class VideoProcessingService {
 
         webpKey = webpUploadResult.key;
         webpUrl = webpUploadResult.url;
-        webpCloudFrontUrl = webpUploadResult.cloudFrontUrl;
+        webpCloudFrontUrl = S3_CONFIG.CLOUDFRONT.DOMAIN 
+          ? `https://${S3_CONFIG.CLOUDFRONT.DOMAIN}/${webpUploadResult.key}`
+          : webpUploadResult.url;
       }
 
       return {
         key: uploadResult.key,
         url: uploadResult.url,
-        cloudFrontUrl: uploadResult.cloudFrontUrl,
+        cloudFrontUrl,
         webpKey,
         webpUrl,
         webpCloudFrontUrl,

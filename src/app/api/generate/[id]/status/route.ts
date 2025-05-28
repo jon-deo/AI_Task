@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { videoGenerationQueue } from '@/services/queue-manager';
+import type { Job } from 'bullmq';
+
+interface VideoMetadata {
+  status?: string;
+  [key: string]: any;
+}
+
+interface QueueJobRequest {
+  videoId?: string;
+  reelId?: string;
+  celebrity?: {
+    name: string;
+  };
+}
+
+interface QueueJobProgress {
+  stage?: string;
+  [key: string]: any;
+}
 
 interface RouteParams {
   params: {
@@ -38,7 +57,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (video) {
       // Extract status from metadata if available
-      const metadata = video.metadata as any;
+      const metadata = video.metadata as VideoMetadata;
       const status = metadata?.status || video.status || 'UNKNOWN';
 
       return NextResponse.json({
@@ -90,16 +109,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // If not found in database, check if it's in the queue
-    const queueJobs = videoGenerationQueue.getJobs({});
-    const queueJob = queueJobs.find(job =>
-      job.id === id ||
-      job.request?.videoId === id ||
-      job.request?.reelId === id
-    );
+    const queueJobs = await videoGenerationQueue.getJobs({ status: 'active' }) as unknown as Job<QueueJobRequest>[];
+    const queueJob = queueJobs.find(job => {
+      const request = job.data;
+      return job.id === id || request.videoId === id || request.reelId === id;
+    });
 
     if (queueJob) {
-      const status = queueJob.error ? 'FAILED' :
-                   queueJob.progress?.stage === 'complete' ? 'COMPLETED' :
+      const progress = queueJob.progress as QueueJobProgress;
+      const status = queueJob.failedReason ? 'FAILED' :
+                   progress?.stage === 'complete' ? 'COMPLETED' :
                    videoGenerationQueue.getStatus().processing ? 'PROCESSING' : 'PENDING';
 
       return NextResponse.json({
@@ -107,12 +126,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         data: {
           id: queueJob.id,
           status: status,
-          progress: queueJob.progress,
-          error: queueJob.error,
-          attempts: queueJob.attempts,
-          maxAttempts: queueJob.maxAttempts,
-          createdAt: queueJob.createdAt,
-          celebrity: queueJob.request?.celebrity?.name,
+          progress: progress,
+          error: queueJob.failedReason,
+          attempts: queueJob.attemptsMade,
+          maxAttempts: queueJob.opts?.attempts || 1,
+          createdAt: queueJob.timestamp,
+          celebrity: queueJob.data?.celebrity?.name,
         },
       });
     }

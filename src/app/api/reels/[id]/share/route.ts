@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiting';
@@ -115,8 +116,7 @@ export async function POST(
             userLikes: true,
             userShares: true,
             userViews: true,
-            comments: true,
-          },
+          } as Prisma.VideoReelCountOutputTypeSelect,
         },
       },
     });

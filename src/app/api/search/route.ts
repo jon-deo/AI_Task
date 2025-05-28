@@ -64,7 +64,11 @@ export async function GET(request: NextRequest) {
     const validatedParams = searchSchema.parse(queryParams);
 
     // Parse pagination parameters
-    const paginationParams = parsePaginationParams(request, PAGINATION_CONFIGS.SEARCH);
+    const paginationParams = parsePaginationParams(request, {
+      ...PAGINATION_CONFIGS.SEARCH,
+      allowedSortFields: PAGINATION_CONFIGS.SEARCH.allowedSortFields as unknown as string[],
+      allowedSortOrders: PAGINATION_CONFIGS.SEARCH.allowedSortOrders as unknown as ("asc" | "desc")[],
+    });
 
     // Generate cache key
     const cacheKey = CACHE_KEYS.search(
@@ -236,7 +240,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Cache the result
-    await cacheManager.set(cacheKey, results, CACHE_CONFIGS.SEARCH);
+    await cacheManager.set(cacheKey, results, {
+      ...CACHE_CONFIGS.SEARCH,
+      tags: CACHE_CONFIGS.SEARCH.tags as unknown as string[],
+    });
 
     // Log search query for analytics
     // Temporarily disabled to debug BigInt serialization issue
@@ -348,28 +355,16 @@ export async function POST(request: NextRequest) {
       take: 5,
     });
 
-    // Get popular search terms
-    const popularSearches = await prisma.searchQuery.groupBy({
-      by: ['query'],
-      where: {
-        query: { contains: searchTerm, mode: 'insensitive' },
-        createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // Last 7 days
-      },
-      _count: { query: true },
-      orderBy: { _count: { query: 'desc' } },
-      take: 5,
-    });
-
     const suggestions = {
       celebrities: celebritySuggestions,
-      popularSearches: popularSearches.map(item => ({
-        query: item.query,
-        count: item._count.query,
-      })),
+      popularSearches: [], // Removed searchQuery functionality as it's not in schema
     };
 
     // Cache suggestions for 1 hour
-    await cacheManager.set(cacheKey, suggestions, { ttl: 3600, tags: ['search'] });
+    await cacheManager.set(cacheKey, suggestions, { 
+      ttl: 3600, 
+      tags: ['search'] 
+    });
 
     return NextResponse.json({
       success: true,

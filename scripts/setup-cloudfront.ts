@@ -8,6 +8,10 @@ import {
   GetOriginAccessControlCommand,
   ListDistributionsCommand,
   CreateInvalidationCommand,
+  ViewerProtocolPolicy,
+  Method,
+  ItemSelection,
+  PriceClass,
 } from '@aws-sdk/client-cloudfront';
 
 import { config } from '../src/config';
@@ -71,7 +75,7 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
     Comment: `Distribution for ${BUCKET_NAME} - Sports Celebrity Reels`,
     DefaultRootObject: 'index.html',
     Enabled: true,
-    PriceClass: 'PriceClass_All',
+    PriceClass: PriceClass.PriceClass_100,
     
     Origins: {
       Quantity: 1,
@@ -89,19 +93,27 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
 
     DefaultCacheBehavior: {
       TargetOriginId: `${BUCKET_NAME}-origin`,
-      ViewerProtocolPolicy: 'redirect-to-https',
+      ViewerProtocolPolicy: ViewerProtocolPolicy.redirect_to_https,
       AllowedMethods: {
         Quantity: 7,
-        Items: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
+        Items: [
+          Method.GET,
+          Method.HEAD,
+          Method.OPTIONS,
+          Method.PUT,
+          Method.POST,
+          Method.PATCH,
+          Method.DELETE
+        ],
         CachedMethods: {
           Quantity: 2,
-          Items: ['GET', 'HEAD'],
+          Items: [Method.GET, Method.HEAD],
         },
       },
       ForwardedValues: {
         QueryString: false,
         Cookies: {
-          Forward: 'none',
+          Forward: ItemSelection.none,
         },
         Headers: {
           Quantity: 0,
@@ -123,18 +135,18 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
         {
           PathPattern: 'videos/*',
           TargetOriginId: `${BUCKET_NAME}-origin`,
-          ViewerProtocolPolicy: 'redirect-to-https',
+          ViewerProtocolPolicy: ViewerProtocolPolicy.redirect_to_https,
           AllowedMethods: {
             Quantity: 2,
-            Items: ['GET', 'HEAD'],
+            Items: [Method.GET, Method.HEAD],
             CachedMethods: {
               Quantity: 2,
-              Items: ['GET', 'HEAD'],
+              Items: [Method.GET, Method.HEAD],
             },
           },
           ForwardedValues: {
             QueryString: false,
-            Cookies: { Forward: 'none' },
+            Cookies: { Forward: ItemSelection.none },
           },
           TrustedSigners: {
             Enabled: false,
@@ -148,18 +160,18 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
         {
           PathPattern: 'thumbnails/*',
           TargetOriginId: `${BUCKET_NAME}-origin`,
-          ViewerProtocolPolicy: 'redirect-to-https',
+          ViewerProtocolPolicy: ViewerProtocolPolicy.redirect_to_https,
           AllowedMethods: {
             Quantity: 2,
-            Items: ['GET', 'HEAD'],
+            Items: [Method.GET, Method.HEAD],
             CachedMethods: {
               Quantity: 2,
-              Items: ['GET', 'HEAD'],
+              Items: [Method.GET, Method.HEAD],
             },
           },
           ForwardedValues: {
             QueryString: false,
-            Cookies: { Forward: 'none' },
+            Cookies: { Forward: ItemSelection.none },
           },
           TrustedSigners: {
             Enabled: false,
@@ -173,18 +185,18 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
         {
           PathPattern: 'images/*',
           TargetOriginId: `${BUCKET_NAME}-origin`,
-          ViewerProtocolPolicy: 'redirect-to-https',
+          ViewerProtocolPolicy: ViewerProtocolPolicy.redirect_to_https,
           AllowedMethods: {
             Quantity: 2,
-            Items: ['GET', 'HEAD'],
+            Items: [Method.GET, Method.HEAD],
             CachedMethods: {
               Quantity: 2,
-              Items: ['GET', 'HEAD'],
+              Items: [Method.GET, Method.HEAD],
             },
           },
           ForwardedValues: {
             QueryString: false,
-            Cookies: { Forward: 'none' },
+            Cookies: { Forward: ItemSelection.none },
           },
           TrustedSigners: {
             Enabled: false,
@@ -203,13 +215,13 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
       Items: [
         {
           ErrorCode: 403,
-          ResponseCode: 404,
+          ResponseCode: '404',
           ResponsePagePath: '/404.html',
           ErrorCachingMinTTL: 300,
         },
         {
           ErrorCode: 404,
-          ResponseCode: 404,
+          ResponseCode: '404',
           ResponsePagePath: '/404.html',
           ErrorCachingMinTTL: 300,
         },
