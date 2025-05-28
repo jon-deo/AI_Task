@@ -20,7 +20,13 @@ const rateLimitMiddleware = createRateLimitMiddleware({
   maxRequests: 100, // Stricter limit for analytics
 });
 
+// Force dynamic rendering
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+// Prevent static optimization
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 /**
  * GET /api/analytics - Get analytics data (Admin only)
