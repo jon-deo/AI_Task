@@ -5,6 +5,9 @@ import { prisma } from '@/lib/prisma';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiting';
 import { cacheManager, CACHE_CONFIGS, CACHE_KEYS } from '@/lib/caching';
 
+// Force dynamic route handling
+export const dynamic = 'force-dynamic';
+
 // Request validation schemas
 const updateCelebritySchema = z.object({
   name: z.string().min(1).max(100),
