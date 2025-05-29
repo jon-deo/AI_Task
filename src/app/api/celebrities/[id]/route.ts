@@ -7,10 +7,10 @@ import { cacheManager, CACHE_CONFIGS, CACHE_KEYS } from '@/lib/caching';
 
 // Request validation schemas
 const updateCelebritySchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  sport: z.enum(['FOOTBALL', 'BASKETBALL', 'BASEBALL', 'SOCCER', 'TENNIS', 'GOLF', 'HOCKEY', 'BOXING', 'MMA', 'CRICKET', 'RUGBY', 'VOLLEYBALL', 'SWIMMING', 'ATHLETICS', 'CYCLING', 'MOTORSPORT', 'OTHER']).optional(),
-  nationality: z.string().min(1).max(50).optional(),
-  biography: z.string().min(10).max(2000).optional(),
+  name: z.string().min(1).max(100),
+  sport: z.enum(['FOOTBALL', 'BASKETBALL', 'BASEBALL', 'SOCCER', 'TENNIS', 'GOLF', 'HOCKEY', 'BOXING', 'MMA', 'CRICKET', 'RUGBY', 'VOLLEYBALL', 'SWIMMING', 'ATHLETICS', 'CYCLING', 'MOTORSPORT', 'OTHER']),
+  nationality: z.string().min(1).max(50),
+  biography: z.string().min(10).max(2000),
   achievements: z.array(z.string()).optional(),
   position: z.string().max(50).optional(),
   team: z.string().max(100).optional(),
