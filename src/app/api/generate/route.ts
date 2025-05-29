@@ -232,38 +232,34 @@ export async function POST(req: Request) {
 
       console.log(`✅ Real video generated: ${result.videoUrl}`);
 
-      // Create video record in database with the REAL video URL
-      const video = await prisma.video.create({
-        data: {
-          title: result.title,
-          description: result.description,
-          s3Url: result.videoUrl, // This is now the REAL MP4 video URL
-          metadata: {
-            celebrity: celebrityName,
-            script: result.script,
-            status: 'COMPLETED',
-            videoS3Key: result.videoS3Key,
-            thumbnailUrl: result.thumbnailUrl,
-            audioUrl: result.audioUrl,
-            duration: result.metadata.duration,
-            resolution: result.metadata.resolution,
-            fileSize: result.metadata.fileSize,
-            costs: result.metadata.costs,
-          },
-        },
-      });
-
-      // Get celebrity from database for VideoReel creation
+      // Get celebrity from database
       const celebrity = await prisma.celebrity.findFirst({
         where: { name: celebrityName },
       });
 
       if (!celebrity) {
-        return NextResponse.json(
-          { success: false, error: 'Celebrity not found' },
-          { status: 404 }
-        );
+        throw new Error('Celebrity not found');
       }
+
+      const video = await prisma.videoReel.create({
+        data: {
+          title: result.title,
+          description: result.description,
+          videoUrl: result.videoUrl,
+          thumbnailUrl: result.thumbnailUrl,
+          duration: result.metadata.duration,
+          fileSize: BigInt(result.metadata.fileSize),
+          resolution: result.metadata.resolution,
+          bitrate: '1000k', // Example value
+          format: 'mp4',
+          s3Key: result.videoS3Key,
+          s3Bucket: process.env.AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || 'essentially-sports-task', // Use environment variable
+          status: 'COMPLETED',
+          script: result.script,
+          slug: result.title.toLowerCase().replace(/\s+/g, '-'), // Generate slug from title
+          celebrityId: celebrity.id, // Ensure celebrity is defined
+        },
+      });
 
       // Also create a corresponding VideoReel record for API compatibility
       const slug = result.title
@@ -288,9 +284,26 @@ export async function POST(req: Request) {
           slug: uniqueSlug,
         });
 
+        // Check if video with this s3Key already exists
+        const existingVideo = await prisma.videoReel.findUnique({
+          where: { s3Key: result.videoS3Key },
+        });
+
+        if (existingVideo) {
+          console.log('Video with this s3Key already exists, returning existing video');
+          const serializedVideo = {
+            ...existingVideo,
+            fileSize: existingVideo.fileSize.toString(),
+          };
+          return NextResponse.json({
+            success: true,
+            id: existingVideo.id,
+            data: serializedVideo,
+          });
+        }
+
         const videoReel = await prisma.videoReel.create({
           data: {
-            // Let Prisma generate a new ID for the VideoReel
             title: result.title,
             description: result.description,
             celebrityId: celebrity.id,
@@ -299,37 +312,42 @@ export async function POST(req: Request) {
             duration: result.metadata.duration,
             script: result.script,
             slug: uniqueSlug,
-            isPublic: true, // Make generated reels public for testing
+            isPublic: true,
             isFeatured: false,
-            views: BigInt(0),
-            likes: BigInt(0),
-            shares: BigInt(0),
-            comments: BigInt(0),
             fileSize: BigInt(result.metadata.fileSize),
             resolution: result.metadata.resolution,
             bitrate: '2000',
             format: 'mp4',
             status: 'COMPLETED',
             s3Key: result.videoS3Key,
-            s3Bucket: 'your-bucket-name', // You might want to make this configurable
+            s3Bucket: process.env.AWS_S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || 'essentially-sports-task',
           },
         });
 
         console.log('VideoReel created successfully with ID:', videoReel.id);
 
+        // Convert BigInt to string for JSON serialization
+        const serializedVideo = {
+          ...videoReel,
+          fileSize: videoReel.fileSize.toString(),
+        };
+
         return NextResponse.json({
           success: true,
-          id: videoReel.id, // Return the VideoReel ID so it can be accessed via /api/reels/[id]
-          data: video,
+          id: videoReel.id,
+          data: serializedVideo,
         });
       } catch (videoReelError) {
         console.error('Failed to create VideoReel:', videoReelError);
-        // Return the video ID as fallback
-        return NextResponse.json({
-          success: true,
-          id: video.id,
-          data: video,
-        });
+
+        // Handle the error response with proper BigInt serialization
+        const errorResponse = {
+          success: false,
+          error: videoReelError instanceof Error ? videoReelError.message : 'Unknown error',
+          code: videoReelError instanceof Error && 'code' in videoReelError ? videoReelError.code : undefined,
+        };
+
+        return NextResponse.json(errorResponse, { status: 500 });
       }
     }
 
@@ -440,8 +458,8 @@ export async function GET(request: NextRequest) {
         data: {
           jobId,
           status: queueJob.error ? 'failed' :
-                 queueJob.progress?.stage === 'complete' ? 'completed' :
-                 videoGenerationQueue.getStatus().processing ? 'processing' : 'queued',
+            queueJob.progress?.stage === 'complete' ? 'completed' :
+              videoGenerationQueue.getStatus().processing ? 'processing' : 'queued',
           progress: queueJob.progress,
           error: queueJob.error,
           attempts: queueJob.attempts,

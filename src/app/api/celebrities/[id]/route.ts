@@ -85,8 +85,8 @@ export async function GET(
         isActive: true,
       },
       include: {
-        reels: {
-          where: { isPublished: true },
+        videoReels: {
+          where: { isPublic: true },
           select: {
             id: true,
             title: true,
@@ -98,13 +98,6 @@ export async function GET(
           },
           orderBy: { createdAt: 'desc' },
           take: 10,
-        },
-        _count: {
-          select: {
-            reels: {
-              where: { isPublished: true },
-            },
-          },
         },
       },
     });
@@ -122,12 +115,15 @@ export async function GET(
     // Transform the response
     const responseData = {
       ...celebrity,
-      reelsCount: celebrity._count.reels,
-      _count: undefined,
+      reelsCount: celebrity.videoReels?.length,
     };
 
     // Cache the result
-    await cacheManager.set(cacheKey, responseData, CACHE_CONFIGS.CELEBRITY);
+    await cacheManager.set(cacheKey, responseData, {
+      ...CACHE_CONFIGS.CELEBRITY,
+      tags: [...CACHE_CONFIGS.CELEBRITY.tags],
+      vary: [...CACHE_CONFIGS.CELEBRITY.vary],
+    });
 
     // Increment view count asynchronously
     prisma.celebrity.update({
@@ -335,9 +331,7 @@ export async function DELETE(
     const celebrity = await prisma.celebrity.findUnique({
       where: { id },
       include: {
-        _count: {
-          select: { reels: true },
-        },
+        videoReels: true,
       },
     });
 
@@ -352,7 +346,7 @@ export async function DELETE(
     }
 
     // Check if celebrity has reels (soft delete instead)
-    if (celebrity._count.reels > 0) {
+    if (celebrity.videoReels && celebrity.videoReels.length > 0) {
       // Soft delete by setting isActive to false
       await prisma.celebrity.update({
         where: { id },

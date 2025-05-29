@@ -77,11 +77,7 @@ async function main() {
             ...celebrity,
             isActive: true,
             isVerified: true,
-            slug: celebrity.name.toLowerCase().replace(/\s+/g, '-'),
-            totalViews: BigInt(0),
-            totalLikes: BigInt(0),
-            totalShares: BigInt(0),
-            reelsCount: 0
+            slug: celebrity.name.toLowerCase().replace(/\s+/g, '-')
           }
         });
         console.log(`✅ Created celebrity: ${result.name}`);

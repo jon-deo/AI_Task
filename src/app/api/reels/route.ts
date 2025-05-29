@@ -16,7 +16,7 @@ import {
 const getReelsSchema = z.object({
   page: z.number().min(1).optional(),
   limit: z.number().min(1).max(50).optional(),
-  sort: z.enum(['createdAt', 'updatedAt', 'views', 'likes', 'shares', 'duration', 'title']).optional(),
+  sort: z.enum(['createdAt', 'updatedAt', 'duration', 'title']).optional(),
   order: z.enum(['asc', 'desc']).optional(),
   search: z.string().optional(),
   celebrityId: z.string().optional(),
@@ -32,7 +32,7 @@ const createReelSchema = z.object({
   description: z.string().max(500).optional(),
   celebrityId: z.string().min(1),
   videoUrl: z.string().url(),
-  thumbnailUrl: z.string().url().optional(),
+  thumbnailUrl: z.string().url(),
   duration: z.number().min(1).max(300),
   tags: z.array(z.string()).optional(),
   isPublished: z.boolean().optional(),
@@ -152,11 +152,6 @@ export async function GET(request: NextRequest) {
               slug: true,
             },
           },
-          _count: {
-            select: {
-              videoComments: true,
-            },
-          },
         },
       }),
       prisma.videoReel.count({ where }),
@@ -166,13 +161,7 @@ export async function GET(request: NextRequest) {
     const transformedReels = reels.map((reel: any) => ({
       ...reel,
       // Convert BigInt fields to strings for JSON serialization
-      views: reel.views.toString(),
-      likes: reel.likes.toString(),
-      shares: reel.shares.toString(),
-      comments: reel.comments.toString(),
       fileSize: reel.fileSize.toString(),
-      commentsCount: reel._count.videoComments,
-      _count: undefined,
     }));
 
     // Create pagination result
@@ -200,23 +189,11 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Get reels error:', error);
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid query parameters',
-          details: error.errors,
-        },
-        { status: 400 }
-      );
-    }
-
+    console.error('Error fetching reels:', error);
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to fetch reels',
+        error: error instanceof Error ? error.message : 'Failed to fetch reels',
       },
       { status: 500 }
     );
@@ -288,11 +265,9 @@ export async function POST(request: NextRequest) {
         description: reelData.description || '',
         celebrityId: reelData.celebrityId,
         videoUrl: reelData.videoUrl,
-        thumbnailUrl: reelData.thumbnailUrl || undefined,
+        thumbnailUrl: reelData.thumbnailUrl,
         duration: reelData.duration,
         tags: reelData.tags || [],
-        metaTitle: reelData.metaTitle || undefined,
-        metaDescription: reelData.metaDescription || undefined,
         slug: uniqueSlug,
         isPublic: isPublished ?? false,
         isFeatured: featured ?? false,

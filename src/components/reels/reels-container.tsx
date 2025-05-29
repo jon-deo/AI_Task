@@ -77,11 +77,11 @@ export const ReelsContainer = memo(function ReelsContainer({
     loading = false,
     error = null,
     hasMore = false,
-    loadMore = () => {},
-    refresh = () => {},
-    likeReel = async () => {},
-    shareReel = async () => {},
-    updateViews = async () => {},
+    loadMore = () => { },
+    refresh = () => { },
+    likeReel = async () => { },
+    shareReel = async () => { },
+    updateViews = async () => { },
   } = useReels({
     initialData: initialReels || [],
     autoLoad: true,
@@ -308,89 +308,85 @@ export const ReelsContainer = memo(function ReelsContainer({
           {/* Main reels container */}
           <div
             ref={containerRef}
-        className="h-full overflow-y-auto snap-y snap-mandatory scrollbar-hide reel-container"
-        style={{
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-        }}
-      >
-        {/* Optimized rendering - only render visible reels for performance */}
-        <AnimatePresence mode="wait">
-          {Array.isArray(reels) && reels.map((reel, index) => {
-            if (!reel?.id) return null;
+            className="h-full overflow-y-auto snap-y snap-mandatory scrollbar-hide reel-container"
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }}
+          >
+            {/* Optimized rendering - only render visible reels for performance */}
+            <AnimatePresence mode="wait">
+              {Array.isArray(reels) && reels.map((reel, index) => {
+                if (!reel?.id) return null;
 
-            // Only render reels that are visible or adjacent for performance
-            const isVisible = Math.abs(index - currentIndex) <= 2;
+                // Only render reels that are visible or adjacent for performance
+                const isVisible = Math.abs(index - currentIndex) <= 2;
 
-            if (!isVisible) {
-              return (
+                if (!isVisible) {
+                  return (
+                    <div
+                      key={reel.id}
+                      className="h-full snap-start snap-always reel-item bg-black"
+                    />
+                  );
+                }
+
+                return (
+                  <motion.div
+                    key={reel.id}
+                    className="h-full snap-start snap-always reel-item"
+                  >
+                    <ReelItem
+                      reel={reel}
+                      isActive={index === currentIndex && !isScrolling}
+                      autoPlay={autoPlay}
+                      onVideoEnd={handleVideoEnd}
+                      preloadNext={index === currentIndex + 1}
+                      preloadPrev={index === currentIndex - 1}
+                    />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+
+            {/* Loading indicator for infinite scroll */}
+            {enableInfiniteScroll && hasMore && !loading && (
+              <div ref={loadMoreRef} className="h-20 flex items-center justify-center">
+                <ReelsLoading />
+              </div>
+            )}
+
+            {/* End of content indicator */}
+            {enableInfiniteScroll && !hasMore && reels.length > 0 && (
+              <div className="h-20 flex items-center justify-center">
+                <div className="text-white/60 text-sm text-center">
+                  <div className="text-2xl mb-2">🎬</div>
+                  <div>You've reached the end!</div>
+                  <div className="text-xs mt-1">No more reels to load</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Scroll indicators */}
+          <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10">
+            <div className="flex flex-col space-y-2">
+              {Array.isArray(reels) && reels.slice(0, 5).map((_, index) => (
                 <div
-                  key={reel.id}
-                  className="h-full snap-start snap-always reel-item bg-black"
+                  key={index}
+                  className={`w-1 h-8 rounded-full transition-all duration-300 ${index === currentIndex
+                    ? 'bg-white'
+                    : 'bg-white/30'
+                    }`}
                 />
-              );
-            }
-
-            return (
-              <motion.div
-                key={reel.id}
-                className="h-full snap-start snap-always reel-item"
-              >
-                <ReelItem
-                  reel={reel}
-                  isActive={index === currentIndex && !isScrolling}
-                  autoPlay={autoPlay}
-                  onVideoEnd={handleVideoEnd}
-                  onLike={likeReel}
-                  onShare={shareReel}
-                  onViewUpdate={updateViews}
-                  preloadNext={index === currentIndex + 1}
-                  preloadPrev={index === currentIndex - 1}
-                />
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-
-        {/* Loading indicator for infinite scroll */}
-        {enableInfiniteScroll && hasMore && !loading && (
-          <div ref={loadMoreRef} className="h-20 flex items-center justify-center">
-            <ReelsLoading />
-          </div>
-        )}
-
-        {/* End of content indicator */}
-        {enableInfiniteScroll && !hasMore && reels.length > 0 && (
-          <div className="h-20 flex items-center justify-center">
-            <div className="text-white/60 text-sm text-center">
-              <div className="text-2xl mb-2">🎬</div>
-              <div>You've reached the end!</div>
-              <div className="text-xs mt-1">No more reels to load</div>
+              ))}
+              {Array.isArray(reels) && reels.length > 5 && (
+                <div className="text-white/60 text-xs text-center mt-2">
+                  {currentIndex + 1}/{reels.length}
+                </div>
+              )}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Scroll indicators */}
-      <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10">
-        <div className="flex flex-col space-y-2">
-          {Array.isArray(reels) && reels.slice(0, 5).map((_, index) => (
-            <div
-              key={index}
-              className={`w-1 h-8 rounded-full transition-all duration-300 ${
-                index === currentIndex
-                  ? 'bg-white'
-                  : 'bg-white/30'
-              }`}
-            />
-          ))}
-          {Array.isArray(reels) && reels.length > 5 && (
-            <div className="text-white/60 text-xs text-center mt-2">
-              {currentIndex + 1}/{reels.length}
-            </div>
-          )}
-        </div>
-      </div>
 
           {/* Loading overlay */}
           {loading && (!Array.isArray(reels) || reels.length === 0) && (

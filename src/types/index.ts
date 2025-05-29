@@ -12,9 +12,6 @@ export interface Celebrity {
   birthDate: Date | null;
   nationality: string | null;
   isActive: boolean;
-  totalViews: bigint;
-  totalLikes: bigint;
-  totalShares: bigint;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,24 +32,9 @@ export interface VideoReel {
   s3Key: string;
   s3Bucket: string;
   cloudFrontUrl: string | null;
-  views: bigint;
-  likes: bigint;
-  shares: bigint;
-  comments: bigint;
   tags: string[];
   isPublic: boolean;
   isFeatured: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface User {
-  id: string;
-  email: string | null;
-  username: string | null;
-  displayName: string | null;
-  avatarUrl: string | null;
-  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -88,22 +70,6 @@ export enum Sport {
   OTHER = 'OTHER',
 }
 
-export enum SharePlatform {
-  TWITTER = 'TWITTER',
-  FACEBOOK = 'FACEBOOK',
-  INSTAGRAM = 'INSTAGRAM',
-  LINKEDIN = 'LINKEDIN',
-  WHATSAPP = 'WHATSAPP',
-  TELEGRAM = 'TELEGRAM',
-  TIKTOK = 'TIKTOK',
-  YOUTUBE = 'YOUTUBE',
-  REDDIT = 'REDDIT',
-  DISCORD = 'DISCORD',
-  EMAIL = 'EMAIL',
-  COPY_LINK = 'COPY_LINK',
-  OTHER = 'OTHER',
-}
-
 export enum GenerationStatus {
   PENDING = 'PENDING',
   PROCESSING = 'PROCESSING',
@@ -112,15 +78,6 @@ export enum GenerationStatus {
   CANCELLED = 'CANCELLED',
 }
 
-// Placeholder types
-export interface UserSession {}
-export interface UserVideoLike {}
-export interface UserVideoShare {}
-export interface UserVideoView {}
-export interface UserCelebrityLike {}
-export interface VideoComment {}
-export interface VideoAnalytics {}
-export interface SystemAnalytics {}
 export interface GenerationJob {
   id: string;
   celebrityId: string;
@@ -147,14 +104,9 @@ export interface GenerationJob {
     sport: Sport;
   };
 }
-export interface Prisma {}
 
 // Extended types with relations
 export interface CelebrityWithStats extends Celebrity {
-  _count: {
-    videoReels: number;
-    userLikes: number;
-  };
   videoReels?: VideoReel[];
 }
 
@@ -166,18 +118,9 @@ export interface VideoReelWithDetails extends VideoReel {
     sport: string;
     imageUrl: string | null;
   };
-  _count: {
-    userLikes: number;
-    userShares: number;
-    userViews: number;
-    comments: number;
-  };
-  commentsCount?: number;
 }
 
 // Custom interfaces for API responses and requests
-
-// API Response Types
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -195,10 +138,8 @@ export interface PaginationInfo {
   hasPrev: boolean;
 }
 
-// Request Types
 export interface CreateVideoRequest {
   celebrityId: string;
-  customPrompt?: string;
   duration?: number;
   voiceType?: VoiceType;
 }
@@ -208,7 +149,7 @@ export interface GetReelsRequest {
   limit?: number;
   sport?: Sport;
   celebrityId?: string;
-  sortBy?: 'createdAt' | 'views' | 'likes';
+  sortBy?: 'createdAt';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -218,7 +159,6 @@ export interface UpdateVideoRequest {
   status?: VideoStatus;
 }
 
-// AI Generation Types
 export interface AIGenerationRequest {
   celebrityName: string;
   sport: string;
@@ -242,9 +182,6 @@ export interface VoiceGenerationRequest {
   pitch?: number;
 }
 
-// VoiceType enum is now imported from Prisma
-
-// AWS S3 Types
 export interface S3UploadResponse {
   key: string;
   url: string;
@@ -259,14 +196,10 @@ export interface S3PresignedUrlRequest {
   fileSize: number;
 }
 
-// Component Props Types
 export interface ReelItemProps {
   reel: VideoReel;
   isActive: boolean;
   onVideoEnd: () => void;
-  onLike: (reelId: string) => void;
-  onShare: (reelId: string) => void;
-  onViewUpdate: (reelId: string) => void;
 }
 
 export interface VideoPlayerProps {
@@ -282,7 +215,6 @@ export interface VideoPlayerProps {
   className?: string;
 }
 
-// Hook Types
 export interface UseReelsReturn {
   reels: VideoReel[];
   loading: boolean;
@@ -290,9 +222,6 @@ export interface UseReelsReturn {
   hasMore: boolean;
   loadMore: () => void;
   refresh: () => void;
-  likeReel: (reelId: string) => Promise<void>;
-  shareReel: (reelId: string) => Promise<void>;
-  updateViews: (reelId: string) => Promise<void>;
 }
 
 export interface UseVideoPlayerReturn {
@@ -310,7 +239,6 @@ export interface UseVideoPlayerReturn {
   toggleMute: () => void;
 }
 
-// Error Types
 export interface AppError {
   code: string;
   message: string;
@@ -330,7 +258,6 @@ export enum ErrorCode {
   S3_UPLOAD_ERROR = 'S3_UPLOAD_ERROR',
 }
 
-// Utility Types
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
 };

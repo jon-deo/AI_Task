@@ -4,12 +4,12 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createRateLimitMiddleware, RATE_LIMITS } from '@/lib/rate-limiting';
 import { cacheManager, CACHE_CONFIGS, CACHE_KEYS } from '@/lib/caching';
-import { 
-  parsePaginationParams, 
-  createPaginationResult, 
-  buildPrismaOrderBy, 
+import {
+  parsePaginationParams,
+  createPaginationResult,
+  buildPrismaOrderBy,
   buildPrismaWhere,
-  PAGINATION_CONFIGS 
+  PAGINATION_CONFIGS
 } from '@/lib/pagination';
 
 // Request validation schemas
@@ -58,6 +58,9 @@ export async function GET(request: NextRequest) {
 
     // Try a simple query first without pagination
     const celebrities = await prisma.celebrity.findMany({
+      where: {
+        isActive: true,
+      },
       select: {
         id: true,
         name: true,
@@ -79,7 +82,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error: unknown) {
     console.error('Get celebrities error:', error);
-    
+
     if (error instanceof Error) {
       console.error('Error details:', {
         name: error.name,

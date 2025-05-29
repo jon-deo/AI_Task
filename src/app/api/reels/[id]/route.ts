@@ -17,10 +17,6 @@ const updateReelSchema = z.object({
   metaDescription: z.string().max(160).optional(),
 });
 
-const reelActionSchema = z.object({
-  action: z.enum(['like', 'unlike', 'share', 'view']),
-});
-
 // Rate limiting middleware
 const rateLimitMiddleware = createRateLimitMiddleware(RATE_LIMITS.PUBLIC);
 
@@ -86,37 +82,6 @@ export async function GET(
             slug: true,
           },
         },
-        videoComments: {
-          where: { isApproved: true },
-          include: {
-            user: {
-              select: {
-                displayName: true,
-                email: true
-              }
-            },
-            children: {
-              where: { isApproved: true },
-              include: {
-                user: {
-                  select: {
-                    displayName: true,
-                    email: true
-                  }
-                }
-              },
-              orderBy: { createdAt: 'asc' },
-              take: 5,
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        },
-        _count: {
-          select: {
-            videoComments: true,
-          },
-        },
       },
     });
 
@@ -142,11 +107,9 @@ export async function GET(
         title: true,
         thumbnailUrl: true,
         duration: true,
-        views: true,
-        likes: true,
         slug: true,
       },
-      orderBy: { views: 'desc' },
+      orderBy: { createdAt: 'desc' },
       take: 6,
     });
 
@@ -154,18 +117,8 @@ export async function GET(
     const responseData = {
       ...reel,
       // Convert BigInt fields to strings for JSON serialization
-      views: reel.views.toString(),
-      likes: reel.likes.toString(),
-      shares: reel.shares.toString(),
-      comments: reel.comments.toString(),
       fileSize: reel.fileSize.toString(),
-      commentsCount: reel._count.videoComments,
-      relatedReels: relatedReels.map(relatedReel => ({
-        ...relatedReel,
-        views: relatedReel.views.toString(),
-        likes: relatedReel.likes.toString(),
-      })),
-      _count: undefined,
+      relatedReels,
     };
 
     // Cache the result
@@ -174,18 +127,6 @@ export async function GET(
       tags: [...CACHE_CONFIGS.REEL.tags],
       vary: [...CACHE_CONFIGS.REEL.vary],
     });
-
-    // Increment view count asynchronously
-    prisma.videoReel.update({
-      where: { id: reel.id },
-      data: { views: { increment: 1 } },
-    }).catch(console.error);
-
-    // Update celebrity total views
-    prisma.celebrity.update({
-      where: { id: reel.celebrityId },
-      data: { totalViews: { increment: 1 } },
-    }).catch(console.error);
 
     // Return response with cache headers
     const response = NextResponse.json({
@@ -203,11 +144,11 @@ export async function GET(
 
     return response;
   } catch (error) {
-    console.error('Get reel error:', error);
+    console.error('Error fetching reel:', error);
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to fetch reel',
+        error: 'Internal server error',
       },
       { status: 500 }
     );
@@ -215,87 +156,30 @@ export async function GET(
 }
 
 /**
- * PUT /api/reels/[id] - Update reel (Admin only)
+ * PUT /api/reels/[id] - Update reel
  */
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Apply stricter rate limiting for updates
-    const rateLimitResult = await createRateLimitMiddleware(RATE_LIMITS.ADMIN)(request);
-    if (!rateLimitResult.allowed) {
-      return new NextResponse(
-        JSON.stringify({
-          success: false,
-          error: 'Rate limit exceeded',
-          retryAfter: rateLimitResult.retryAfter,
-        }),
-        {
-          status: 429,
-          headers: rateLimitResult.headers,
-        }
-      );
-    }
-
-    // TODO: Add authentication middleware to verify admin role
-    // const user = await verifyAdminAuth(request);
-
     const { id } = params;
-
-    // Parse and validate request body
     const body = await request.json();
+
+    // Validate request body
     const validatedData = updateReelSchema.parse(body);
-
-    // Check if reel exists
-    const existingReel = await prisma.videoReel.findUnique({
-      where: { id },
-    });
-
-    if (!existingReel) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Reel not found',
-        },
-        { status: 404 }
-      );
-    }
-
-    // Update slug if title is being changed
-    let updateData: any = { ...validatedData };
-    if (validatedData.title && validatedData.title !== existingReel.title) {
-      const newSlug = validatedData.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
-
-      // Ensure unique slug
-      let uniqueSlug = newSlug;
-      let counter = 1;
-      while (await prisma.videoReel.findFirst({
-        where: {
-          slug: uniqueSlug,
-          id: { not: id }
-        }
-      })) {
-        uniqueSlug = `${newSlug}-${counter}`;
-        counter++;
-      }
-
-      updateData.slug = uniqueSlug;
-    }
 
     // Update reel
     const updatedReel = await prisma.videoReel.update({
       where: { id },
-      data: updateData,
+      data: validatedData,
       include: {
         celebrity: {
           select: {
             id: true,
             name: true,
             sport: true,
+            nationality: true,
             imageUrl: true,
             slug: true,
           },
@@ -305,27 +189,15 @@ export async function PUT(
 
     // Invalidate cache
     await cacheManager.delete(CACHE_KEYS.reel(id));
-    await cacheManager.delete(CACHE_KEYS.reel(existingReel.slug));
-    await cacheManager.invalidateByTag('reel');
-
-    // Transform BigInt fields to strings for JSON serialization
-    const transformedReel = {
-      ...updatedReel,
-      views: updatedReel.views.toString(),
-      likes: updatedReel.likes.toString(),
-      shares: updatedReel.shares.toString(),
-      comments: updatedReel.comments.toString(),
-      fileSize: updatedReel.fileSize.toString(),
-    };
 
     return NextResponse.json({
       success: true,
-      data: transformedReel,
-      message: 'Reel updated successfully',
+      data: {
+        ...updatedReel,
+        fileSize: updatedReel.fileSize.toString(),
+      },
     });
   } catch (error) {
-    console.error('Update reel error:', error);
-
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         {
@@ -337,142 +209,11 @@ export async function PUT(
       );
     }
 
+    console.error('Error updating reel:', error);
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to update reel',
-      },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * POST /api/reels/[id] - Perform actions on reel (like, share, etc.)
- */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    // Apply rate limiting for actions
-    const rateLimitResult = await createRateLimitMiddleware(RATE_LIMITS.GENERAL)(request);
-    if (!rateLimitResult.allowed) {
-      return new NextResponse(
-        JSON.stringify({
-          success: false,
-          error: 'Rate limit exceeded',
-          retryAfter: rateLimitResult.retryAfter,
-        }),
-        {
-          status: 429,
-          headers: rateLimitResult.headers,
-        }
-      );
-    }
-
-    const { id } = params;
-
-    // Parse and validate request body
-    const body = await request.json();
-    const { action } = reelActionSchema.parse(body);
-
-    // Find reel
-    const reel = await prisma.videoReel.findFirst({
-      where: {
-        OR: [{ id }, { slug: id }],
-        isPublic: true,
-      },
-    });
-
-    if (!reel) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Reel not found',
-        },
-        { status: 404 }
-      );
-    }
-
-    let updateData: any = {};
-    let celebrityUpdateData: any = {};
-
-    switch (action) {
-      case 'like':
-        updateData.likes = { increment: 1 };
-        celebrityUpdateData.totalLikes = { increment: 1 };
-        break;
-      case 'unlike':
-        updateData.likes = { decrement: 1 };
-        celebrityUpdateData.totalLikes = { decrement: 1 };
-        break;
-      case 'share':
-        updateData.shares = { increment: 1 };
-        celebrityUpdateData.totalShares = { increment: 1 };
-        break;
-      case 'view':
-        updateData.views = { increment: 1 };
-        celebrityUpdateData.totalViews = { increment: 1 };
-        break;
-    }
-
-    // Update reel and celebrity stats in parallel
-    const [updatedReel] = await Promise.all([
-      prisma.videoReel.update({
-        where: { id: reel.id },
-        data: updateData,
-        select: {
-          id: true,
-          views: true,
-          likes: true,
-          shares: true,
-        },
-      }),
-      prisma.celebrity.update({
-        where: { id: reel.celebrityId },
-        data: celebrityUpdateData,
-      }),
-    ]);
-
-    // Invalidate cache for this reel
-    await cacheManager.delete(CACHE_KEYS.reel(id));
-    await cacheManager.delete(CACHE_KEYS.reel(reel.slug));
-
-    // Transform BigInt fields to strings for JSON serialization
-    const transformedReel = {
-      ...updatedReel,
-      views: updatedReel.views.toString(),
-      likes: updatedReel.likes.toString(),
-      shares: updatedReel.shares.toString(),
-    };
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        action,
-        reel: transformedReel,
-      },
-      message: `Reel ${action} successful`,
-    });
-  } catch (error) {
-    console.error('Reel action error:', error);
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid action',
-          details: error.errors,
-        },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to perform action',
+        error: 'Internal server error',
       },
       { status: 500 }
     );

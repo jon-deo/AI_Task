@@ -257,9 +257,6 @@ export const PAGINATION_CONFIGS = {
     allowedSortFields: [
       'createdAt',
       'updatedAt',
-      'views',
-      'likes',
-      'shares',
       'duration',
       'title',
     ],
