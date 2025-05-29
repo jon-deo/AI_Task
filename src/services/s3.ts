@@ -106,7 +106,6 @@ export class S3Service {
         ContentType: contentType,
         Metadata: metadata,
         CacheControl: options.cacheControl || this.getDefaultCacheControl(folder),
-        ACL: options.acl || 'public-read',
       });
 
       const result = await this.client.send(command);
@@ -397,7 +396,6 @@ export class S3Service {
         ContentType: contentType,
         Metadata: options.metadata,
         CacheControl: options.cacheControl || this.getDefaultCacheControl(options.folder),
-        ACL: options.acl || 'public-read',
         ServerSideEncryption: 'AES256',
       });
 
