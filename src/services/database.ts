@@ -2,11 +2,8 @@ import { Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 import type {
-  Celebrity,
-  VideoReel,
   VideoStatus,
   Sport,
-  VoiceType,
   PaginationInfo,
 } from '@/types';
 
@@ -101,119 +98,119 @@ export class CelebrityService {
 // VIDEO REEL SERVICES
 // ================================
 
-export class VideoReelService {
-  static async getAll(params: {
-    page?: number;
-    limit?: number;
-    status?: VideoStatus;
-    celebrityId?: string;
-    isPublic?: boolean;
-    isFeatured?: boolean;
-    sortBy?: 'createdAt';
-    sortOrder?: 'asc' | 'desc';
-  } = {}) {
-    const {
-      page = 1,
-      limit = 10,
-      status,
-      celebrityId,
-      isPublic,
-      isFeatured,
-      sortBy = 'createdAt',
-      sortOrder = 'desc',
-    } = params;
-    const skip = (page - 1) * limit;
+// export class VideoReelService {
+//   static async getAll(params: {
+//     page?: number;
+//     limit?: number;
+//     status?: VideoStatus;
+//     celebrityId?: string;
+//     isPublic?: boolean;
+//     isFeatured?: boolean;
+//     sortBy?: 'createdAt';
+//     sortOrder?: 'asc' | 'desc';
+//   } = {}) {
+//     const {
+//       page = 1,
+//       limit = 10,
+//       status,
+//       celebrityId,
+//       isPublic,
+//       isFeatured,
+//       sortBy = 'createdAt',
+//       sortOrder = 'desc',
+//     } = params;
+//     const skip = (page - 1) * limit;
 
-    const where: Prisma.VideoReelWhereInput = {
-      ...(status && { status }),
-      ...(celebrityId && { celebrityId }),
-      ...(isPublic !== undefined && { isPublic }),
-      ...(isFeatured !== undefined && { isFeatured }),
-    };
+//     const where: Prisma.VideoReelWhereInput = {
+//       ...(status && { status: status as VideoStatus }),
+//       ...(celebrityId && { celebrityId }),
+//       ...(isPublic !== undefined && { isPublic }),
+//       ...(isFeatured !== undefined && { isFeatured }),
+//     };
 
-    const [reels, total] = await Promise.all([
-      prisma.videoReel.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { [sortBy]: sortOrder },
-        include: {
-          celebrity: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-              sport: true,
-              imageUrl: true,
-            },
-          },
-        },
-      }),
-      prisma.videoReel.count({ where }),
-    ]);
+//     const [reels, total] = await Promise.all([
+//       prisma.videoReel.findMany({
+//         where,
+//         skip,
+//         take: limit,
+//         orderBy: { [sortBy]: sortOrder },
+//         include: {
+//           celebrity: {
+//             select: {
+//               id: true,
+//               name: true,
+//               slug: true,
+//               sport: true,
+//               imageUrl: true,
+//             },
+//           },
+//         },
+//       }),
+//       prisma.videoReel.count({ where }),
+//     ]);
 
-    const pagination: PaginationInfo = {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-      hasNext: page < Math.ceil(total / limit),
-      hasPrev: page > 1,
-    };
+//     const pagination: PaginationInfo = {
+//       page,
+//       limit,
+//       total,
+//       totalPages: Math.ceil(total / limit),
+//       hasNext: page < Math.ceil(total / limit),
+//       hasPrev: page > 1,
+//     };
 
-    return { reels, pagination };
-  }
+//     return { reels, pagination };
+//   }
 
-  static async getById(id: string) {
-    return await prisma.videoReel.findUnique({
-      where: { id },
-      include: {
-        celebrity: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            sport: true,
-            imageUrl: true,
-          },
-        },
-      },
-    });
-  }
+//   static async getById(id: string) {
+//     return await prisma.videoReel.findUnique({
+//       where: { id },
+//       include: {
+//         celebrity: {
+//           select: {
+//             id: true,
+//             name: true,
+//             slug: true,
+//             sport: true,
+//             imageUrl: true,
+//           },
+//         },
+//       },
+//     });
+//   }
 
-  static async create(data: Prisma.VideoReelCreateInput) {
-    return await prisma.videoReel.create({
-      data,
-    });
-  }
+//   static async create(data: Prisma.VideoReelCreateInput) {
+//     return await prisma.videoReel.create({
+//       data,
+//     });
+//   }
 
-  static async update(id: string, data: Prisma.VideoReelUpdateInput) {
-    return await prisma.videoReel.update({
-      where: { id },
-      data,
-    });
-  }
+//   static async update(id: string, data: Prisma.VideoReelUpdateInput) {
+//     return await prisma.videoReel.update({
+//       where: { id },
+//       data,
+//     });
+//   }
 
-  static async getFeaturedReels(limit: number = 5) {
-    return await prisma.videoReel.findMany({
-      where: {
-        isFeatured: true,
-        isPublic: true,
-        status: 'COMPLETED',
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      include: {
-        celebrity: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            sport: true,
-            imageUrl: true,
-          },
-        },
-      },
-    });
-  }
-}
+//   static async getFeaturedReels(limit: number = 5) {
+//     return await prisma.videoReel.findMany({
+//       where: {
+//         isFeatured: true,
+//         isPublic: true,
+//         status: 'COMPLETED',
+//       },
+//       orderBy: { createdAt: 'desc' },
+//       take: limit,
+//       include: {
+//         celebrity: {
+//           select: {
+//             id: true,
+//             name: true,
+//             slug: true,
+//             sport: true,
+//             imageUrl: true,
+//           },
+//         },
+//       },
+//     });
+//   }
+// }

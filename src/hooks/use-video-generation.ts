@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import axios from 'axios';
 
-import type { Celebrity, VoiceType } from '@/types';
+import type { VoiceType } from '@/types';
 
 export interface VideoGenerationRequest {
   celebrityId: string;
@@ -90,11 +90,11 @@ export function useVideoGeneration(options: UseVideoGenerationOptions = {}): Use
     setError(null);
     setResult(null);
     setJobId(null);
-    
+
     if (pollTimeoutRef.current) {
       clearTimeout(pollTimeoutRef.current);
     }
-    
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -332,7 +332,7 @@ export function useMultipleVideoGeneration() {
     setGenerations(prev => {
       const existing = prev.get(id);
       if (!existing) return prev;
-      
+
       return new Map(prev.set(id, { ...existing, ...updates }));
     });
   }, []);
@@ -345,7 +345,7 @@ export function useMultipleVideoGeneration() {
 
     try {
       const response = await axios.post('/api/generate', generation.request);
-      
+
       if (!response.data.success) {
         throw new Error(response.data.error || 'Video generation failed');
       }

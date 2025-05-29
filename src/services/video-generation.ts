@@ -5,8 +5,7 @@ import { SpeechSynthesisService, type SpeechSynthesisRequest } from './speech-sy
 import { VideoComposer } from './video-composer';
 import { ImageGenerator } from './image-generator';
 import { S3Service } from './s3';
-import type { Celebrity, GenerationJob } from '@/types';
-import { VoiceType } from '@/types';
+import { type Celebrity, type GenerationJob, VoiceType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 export interface VideoGenerationRequest {
@@ -96,10 +95,11 @@ export class VideoGenerationService {
         data: {
           celebrityId: request.celebrity.id,
           status: 'PROCESSING',
-          prompt: request.customPrompt || null,
+          progress: 0,
           voiceType: request.voiceType || VoiceType.MALE_NARRATOR,
           duration: request.duration,
-          startedAt: new Date(),
+          quality: request.quality || '1080p',
+          includeSubtitles: request.includeSubtitles ?? true,
         },
       });
       generationJob = { id: job.id };
@@ -127,9 +127,8 @@ export class VideoGenerationService {
         await prisma.generationJob.update({
           where: { id: generationJob.id },
           data: {
-            scriptGenerated: true,
-            generatedScript: scriptResult.script,
-            generatedTitle: scriptResult.title,
+            progress: 30,
+            error: null,
           },
         });
       }
@@ -157,7 +156,8 @@ export class VideoGenerationService {
         await prisma.generationJob.update({
           where: { id: generationJob.id },
           data: {
-            voiceGenerated: true,
+            progress: 50,
+            error: null,
           },
         });
       }
@@ -196,8 +196,8 @@ export class VideoGenerationService {
         await prisma.generationJob.update({
           where: { id: generationJob.id },
           data: {
-            videoGenerated: true,
-            generatedVideoUrl: videoResult.videoUrl,
+            progress: 80,
+            error: null,
           },
         });
       }
@@ -224,8 +224,8 @@ export class VideoGenerationService {
           where: { id: generationJob.id },
           data: {
             status: 'COMPLETED',
-            completedAt: new Date(),
-            totalCost: costs.total,
+            progress: 100,
+            error: null,
           },
         });
       }
@@ -264,7 +264,7 @@ export class VideoGenerationService {
           where: { id: generationJob.id },
           data: {
             status: 'FAILED',
-            errorMessage: error.message || 'Unknown error',
+            error: error.message || 'Unknown error',
           },
         });
       }
@@ -694,7 +694,7 @@ export class VideoGenerationService {
       where: { id: jobId },
       data: {
         status: 'CANCELLED',
-        completedAt: new Date(),
+        error: 'Job cancelled by user',
       },
     });
   }
@@ -715,8 +715,9 @@ export class VideoGenerationService {
     const request: VideoGenerationRequest = {
       celebrity: job.celebrity,
       duration: job.duration || 60,
-      voiceType: (job.voiceType as VoiceType) || VoiceType.MALE_NARRATOR,
-      customPrompt: job.prompt || '',
+      voiceType: job.voiceType || VoiceType.MALE_NARRATOR,
+      quality: (job.quality as '720p' | '1080p') || '1080p',
+      includeSubtitles: job.includeSubtitles ?? true,
     };
 
     // Reset job status
@@ -724,9 +725,8 @@ export class VideoGenerationService {
       where: { id: jobId },
       data: {
         status: 'PROCESSING',
-        retryCount: { increment: 1 },
-        startedAt: new Date(),
-        errorMessage: null,
+        progress: 0,
+        error: null,
       },
     });
 

@@ -22,39 +22,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // First, try to find the video in the simple Video table (used by /api/generate)
-    const video = await prisma.video.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-        s3Url: true,
-      },
-    });
-
-    if (video) {
-      // Extract status from metadata if available
-      const metadata = video.metadata as any;
-      const status = metadata?.status || video.status || 'UNKNOWN';
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          id: video.id,
-          status: status,
-          title: video.title,
-          videoUrl: video.s3Url,
-          createdAt: video.createdAt,
-          updatedAt: video.updatedAt,
-          metadata: metadata,
-        },
-      });
-    }
-
     // Try to find in VideoReel table
     const videoReel = await prisma.videoReel.findUnique({
       where: { id },
@@ -63,8 +30,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         title: true,
         status: true,
         videoUrl: true,
+        thumbnailUrl: true,
         createdAt: true,
         updatedAt: true,
+        duration: true,
+        fileSize: true,
+        resolution: true,
+        bitrate: true,
+        format: true,
+        s3Key: true,
+        s3Bucket: true,
+        cloudFrontUrl: true,
         celebrity: {
           select: {
             name: true,
@@ -82,6 +58,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           status: videoReel.status,
           title: videoReel.title,
           videoUrl: videoReel.videoUrl,
+          thumbnailUrl: videoReel.thumbnailUrl,
+          duration: videoReel.duration,
+          fileSize: videoReel.fileSize?.toString(),
+          resolution: videoReel.resolution,
+          bitrate: videoReel.bitrate,
+          format: videoReel.format,
+          s3Key: videoReel.s3Key,
+          s3Bucket: videoReel.s3Bucket,
+          cloudFrontUrl: videoReel.cloudFrontUrl,
           createdAt: videoReel.createdAt,
           updatedAt: videoReel.updatedAt,
           celebrity: videoReel.celebrity,
@@ -89,37 +74,47 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    // If not found in database, check if it's in the queue
-    const queueJobs = videoGenerationQueue.getJobs({});
-    const queueJob = queueJobs.find(job =>
-      job.id === id ||
-      job.request?.videoId === id ||
-      job.request?.reelId === id
-    );
+    // If not found in database, check if it's in the queue (GenerationJob)
+    const generationJob = await prisma.generationJob.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        progress: true,
+        error: true,
+        voiceType: true,
+        createdAt: true,
+        updatedAt: true,
+        celebrity: {
+          select: {
+            name: true,
+            sport: true,
+          },
+        },
+      } as any,
+    });
 
-    if (queueJob) {
-      const status = queueJob.error ? 'FAILED' :
-                   queueJob.progress?.stage === 'complete' ? 'COMPLETED' :
-                   videoGenerationQueue.getStatus().processing ? 'PROCESSING' : 'PENDING';
-
+    if (generationJob) {
       return NextResponse.json({
         success: true,
         data: {
-          id: queueJob.id,
-          status: status,
-          progress: queueJob.progress,
-          error: queueJob.error,
-          attempts: queueJob.attempts,
-          maxAttempts: queueJob.maxAttempts,
-          createdAt: queueJob.createdAt,
-          celebrity: queueJob.request?.celebrity?.name,
-        },
+          id: generationJob.id,
+          status: generationJob.status,
+          title: `Generation Job for ${(generationJob.celebrity as any)?.name || 'Unknown Celebrity'}`,
+          videoUrl: null,
+          progress: generationJob.progress,
+          errorMessage: generationJob.error,
+          createdAt: generationJob.createdAt,
+          updatedAt: generationJob.updatedAt,
+          celebrity: generationJob.celebrity,
+          voiceType: generationJob.voiceType,
+        } as any,
       });
     }
 
     // Not found anywhere
     return NextResponse.json(
-      { success: false, error: 'Video/reel not found' },
+      { success: false, error: 'Video/reel or generation job not found' },
       { status: 404 }
     );
   } catch (error) {

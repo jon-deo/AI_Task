@@ -19,39 +19,39 @@ async function setupDatabase() {
 
     // Create indexes for better performance
     console.log('🔍 Creating performance indexes...');
-    
+
     // Custom indexes that might not be covered by Prisma schema
     const customIndexes = [
       // Composite indexes for common queries
       `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_video_reels_celebrity_status_public" 
        ON "video_reels" ("celebrityId", "status", "isPublic");`,
-      
+
       `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_video_reels_created_views" 
        ON "video_reels" ("createdAt" DESC, "views" DESC);`,
-      
+
       `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_celebrities_sport_active_views" 
        ON "celebrities" ("sport", "isActive", "totalViews" DESC);`,
-      
+
       // Partial indexes for active content
       `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_video_reels_public_completed" 
        ON "video_reels" ("createdAt" DESC) 
        WHERE "isPublic" = true AND "status" = 'COMPLETED';`,
-      
+
       `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_celebrities_active" 
        ON "celebrities" ("totalViews" DESC) 
        WHERE "isActive" = true;`,
-      
+
       // Analytics indexes
       `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_video_analytics_date_video" 
        ON "video_analytics" ("date" DESC, "videoId");`,
-      
+
       `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_user_video_views_user_created" 
        ON "user_video_views" ("userId", "createdAt" DESC);`,
-      
+
       // Search optimization indexes
       `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_celebrities_name_trgm" 
        ON "celebrities" USING gin ("name" gin_trgm_ops);`,
-      
+
       `CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_video_reels_title_trgm" 
        ON "video_reels" USING gin ("title" gin_trgm_ops);`,
     ];
@@ -71,7 +71,7 @@ async function setupDatabase() {
 
     // Enable extensions for better performance
     console.log('🔧 Enabling database extensions...');
-    
+
     const extensions = [
       'CREATE EXTENSION IF NOT EXISTS "pg_trgm";', // For trigram similarity search
       'CREATE EXTENSION IF NOT EXISTS "btree_gin";', // For GIN indexes on btree types
@@ -89,7 +89,7 @@ async function setupDatabase() {
 
     // Create database functions for common operations
     console.log('⚙️  Creating database functions...');
-    
+
     const functions = [
       // Function to update celebrity stats
       `CREATE OR REPLACE FUNCTION update_celebrity_stats()
@@ -109,13 +109,13 @@ async function setupDatabase() {
          RETURN NULL;
        END;
        $$ LANGUAGE plpgsql;`,
-      
+
       // Trigger for celebrity stats
       `DROP TRIGGER IF EXISTS trigger_update_celebrity_stats ON video_reels;
        CREATE TRIGGER trigger_update_celebrity_stats
        AFTER INSERT OR DELETE ON video_reels
        FOR EACH ROW EXECUTE FUNCTION update_celebrity_stats();`,
-      
+
       // Function to calculate engagement rate
       `CREATE OR REPLACE FUNCTION calculate_engagement_rate(video_id text)
        RETURNS DECIMAL AS $$
@@ -239,27 +239,16 @@ async function seedSampleData() {
 
     console.log(`✅ Created ${celebrities.count} sample celebrities`);
 
-    // Create a sample user
-    const user = await prisma.user.create({
-      data: {
-        email: 'demo@example.com',
-        username: 'demo_user',
-        displayName: 'Demo User',
-        isActive: true,
-        preferences: {
-          theme: 'system',
-          notifications: true,
-          autoplay: true,
-        },
-      },
-    });
+    // Skip creating sample user and related data as per project simplification
+    console.log('⏭️  Skipping sample user creation as per project simplification');
 
-    console.log(`✅ Created sample user: ${user.email}`);
-
-    console.log('🎉 Sample data seeded successfully!');
+    console.log('🎉 Sample data seeding completed successfully!');
 
   } catch (error) {
-    console.error('❌ Seeding failed:', error);
+    console.error('❌ Sample data seeding failed:', error);
+    process.exit(1);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 

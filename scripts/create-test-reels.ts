@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 
 import { PrismaClient } from '@prisma/client';
+import { VideoStatus } from '@/types';
 
 const prisma = new PrismaClient();
 
@@ -23,6 +24,7 @@ async function createTestReels() {
           imageUrl: 'https://d2mrk9810fr0rz.cloudfront.net/images/jordan.jpg',
           slug: 'michael-jordan',
           isVerified: true,
+          biography: 'An iconic basketball player.',
         },
         {
           name: 'Lionel Messi',
@@ -31,6 +33,7 @@ async function createTestReels() {
           imageUrl: 'https://d2mrk9810fr0rz.cloudfront.net/images/messi.jpg',
           slug: 'lionel-messi',
           isVerified: true,
+          biography: 'A legendary football player.',
         },
         {
           name: 'Serena Williams',
@@ -39,11 +42,12 @@ async function createTestReels() {
           imageUrl: 'https://d2mrk9810fr0rz.cloudfront.net/images/serena.jpg',
           slug: 'serena-williams',
           isVerified: true,
+          biography: 'A dominant force in tennis.',
         },
       ];
 
       for (const celebrity of testCelebrities) {
-        await prisma.celebrity.create({ data: celebrity });
+        await prisma.celebrity.create({ data: celebrity as any });
       }
 
       celebrities = await prisma.celebrity.findMany();
@@ -94,7 +98,7 @@ async function createTestReels() {
       {
         title: "Jordan's Greatest Moments",
         description: "Relive the legendary basketball moments of Michael Jordan",
-        celebrityId: celebrities[0]?.id || celebrities.find(c => c.name.includes('Jordan'))?.id,
+        celebrityId: celebrities.find(c => c.name.includes('Jordan'))?.id || celebrities[0].id,
         videoUrl: 'https://d2mrk9810fr0rz.cloudfront.net/videos/sample-basketball.mp4',
         thumbnailUrl: 'https://d2mrk9810fr0rz.cloudfront.net/thumbnails/sample-basketball.jpg',
         duration: 45,
@@ -110,7 +114,7 @@ async function createTestReels() {
         resolution: '1080p',
         bitrate: '2000',
         format: 'mp4',
-        status: 'COMPLETED',
+        status: VideoStatus.COMPLETED,
         s3Key: 'videos/sample-basketball.mp4',
         s3Bucket: 'essentially-sports-task',
         tags: ['basketball', 'legend', 'nba'],
@@ -118,7 +122,7 @@ async function createTestReels() {
       {
         title: "Messi's Magic on the Field",
         description: "Watch Lionel Messi's most incredible football moments",
-        celebrityId: celebrities[1]?.id || celebrities.find(c => c.name.includes('Messi'))?.id,
+        celebrityId: celebrities.find(c => c.name.includes('Messi'))?.id || celebrities[0].id,
         videoUrl: 'https://d2mrk9810fr0rz.cloudfront.net/videos/sample-football.mp4',
         thumbnailUrl: 'https://d2mrk9810fr0rz.cloudfront.net/thumbnails/sample-football.jpg',
         duration: 38,
@@ -134,7 +138,7 @@ async function createTestReels() {
         resolution: '1080p',
         bitrate: '2000',
         format: 'mp4',
-        status: 'COMPLETED',
+        status: VideoStatus.COMPLETED,
         s3Key: 'videos/sample-football.mp4',
         s3Bucket: 'essentially-sports-task',
         tags: ['football', 'soccer', 'goat'],
@@ -142,7 +146,7 @@ async function createTestReels() {
       {
         title: "Serena's Tennis Dominance",
         description: "The unstoppable force of Serena Williams in tennis",
-        celebrityId: celebrities[2]?.id || celebrities.find(c => c.name.includes('Serena'))?.id || celebrities[0]?.id,
+        celebrityId: celebrities.find(c => c.name.includes('Serena'))?.id || celebrities[0].id,
         videoUrl: 'https://d2mrk9810fr0rz.cloudfront.net/videos/sample-tennis.mp4',
         thumbnailUrl: 'https://d2mrk9810fr0rz.cloudfront.net/thumbnails/sample-tennis.jpg',
         duration: 42,
@@ -158,7 +162,7 @@ async function createTestReels() {
         resolution: '1080p',
         bitrate: '2000',
         format: 'mp4',
-        status: 'COMPLETED',
+        status: VideoStatus.COMPLETED,
         s3Key: 'videos/sample-tennis.mp4',
         s3Bucket: 'essentially-sports-task',
         tags: ['tennis', 'champion', 'wimbledon'],
@@ -175,7 +179,7 @@ async function createTestReels() {
         });
 
         if (!existingReel) {
-          await prisma.videoReel.create({ data: reelData });
+          await prisma.videoReel.create({ data: reelData as any });
           console.log(`✅ Created reel: ${reelData.title}`);
         } else {
           console.log(`⏭️  Skipped existing reel: ${reelData.title}`);

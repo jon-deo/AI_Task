@@ -92,8 +92,6 @@ export async function GET(
             title: true,
             thumbnailUrl: true,
             duration: true,
-            views: true,
-            likes: true,
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
@@ -124,12 +122,6 @@ export async function GET(
       tags: [...CACHE_CONFIGS.CELEBRITY.tags],
       vary: [...CACHE_CONFIGS.CELEBRITY.vary],
     });
-
-    // Increment view count asynchronously
-    prisma.celebrity.update({
-      where: { id: celebrity.id },
-      data: { totalViews: { increment: 1 } },
-    }).catch(console.error);
 
     // Return response with cache headers
     const response = NextResponse.json({

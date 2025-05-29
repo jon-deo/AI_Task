@@ -391,15 +391,57 @@ export async function POST(req: Request) {
     };
 
     if (validatedData.useQueue) {
-      // Add to queue for background processing
-      const jobId = await videoGenerationQueue.addJob(request, validatedData.priority || 3);
+      // Create generation job
+      const dbJob = await prisma.generationJob.create({
+        data: {
+          celebrityId: celebrity.id,
+          status: 'PENDING',
+          progress: 0,
+          voiceType: validatedData.voiceType || VoiceType.MALE_NARRATOR,
+          quality: validatedData.quality || '1080p',
+          duration: validatedData.duration || 30,
+          includeSubtitles: validatedData.includeSubtitles ?? true,
+        } as any,
+        include: {
+          celebrity: {
+            select: {
+              id: true,
+              name: true,
+              sport: true,
+            },
+          },
+        },
+      });
+
+      // Add to queue
+      await (videoGenerationQueue as any).add('generate-video', {
+        jobId: dbJob.id,
+        celebrityId: celebrity.id,
+        duration: validatedData.duration || 30,
+        voiceType: validatedData.voiceType || VoiceType.MALE_NARRATOR,
+        voiceRegion: validatedData.voiceRegion || 'US',
+        customPrompt: validatedData.customPrompt,
+        imageUrls: validatedData.imageUrls,
+        style: validatedData.style || 'documentary',
+        quality: validatedData.quality || '1080p',
+        includeSubtitles: validatedData.includeSubtitles ?? true,
+        priority: validatedData.priority || 3,
+      });
 
       return NextResponse.json({
         success: true,
         data: {
-          jobId,
-          status: 'queued',
-          message: 'Video generation job added to queue',
+          id: dbJob.id,
+          status: dbJob.status,
+          progress: (dbJob as any).progress,
+          error: (dbJob as any).error,
+          celebrity: (dbJob as any).celebrity,
+          createdAt: dbJob.createdAt,
+          updatedAt: dbJob.updatedAt,
+          voiceType: dbJob.voiceType,
+          quality: (dbJob as any).quality,
+          duration: dbJob.duration,
+          includeSubtitles: (dbJob as any).includeSubtitles,
         },
       });
     } else {
@@ -489,16 +531,15 @@ export async function GET(request: NextRequest) {
         data: {
           jobId,
           status: dbJob.status.toLowerCase(),
-          celebrity: dbJob.celebrity,
+          progress: (dbJob as any).progress,
+          error: (dbJob as any).error,
+          celebrity: (dbJob as any).celebrity,
           createdAt: dbJob.createdAt,
-          startedAt: dbJob.startedAt,
-          completedAt: dbJob.completedAt,
-          error: dbJob.errorMessage,
-          retryCount: dbJob.retryCount,
-          videoUrl: dbJob.generatedVideoUrl,
-          script: dbJob.generatedScript,
-          title: dbJob.generatedTitle,
-          totalCost: dbJob.totalCost,
+          updatedAt: dbJob.updatedAt,
+          voiceType: dbJob.voiceType,
+          quality: (dbJob as any).quality,
+          duration: dbJob.duration,
+          includeSubtitles: (dbJob as any).includeSubtitles,
         },
       });
     }

@@ -165,10 +165,6 @@ export async function POST(request: NextRequest) {
         birthDate: validatedData.birthDate ? new Date(validatedData.birthDate) : null,
         isActive: true,
         isVerified: false,
-        totalViews: BigInt(0),
-        totalLikes: BigInt(0),
-        totalShares: BigInt(0),
-        reelsCount: 0,
       },
       select: {
         id: true,
@@ -185,6 +181,8 @@ export async function POST(request: NextRequest) {
         updatedAt: true,
       },
     });
+
+    console.log('✅ Created celebrity:', celebrity);
 
     // Invalidate celebrity cache
     await cacheManager.invalidateByTag('celebrity');

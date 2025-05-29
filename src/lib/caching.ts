@@ -114,7 +114,7 @@ class MemoryCacheStore implements CacheStore {
 
 // Redis cache store (for production)
 class RedisCacheStore implements CacheStore {
-  constructor(private redisClient: any) {}
+  constructor(private redisClient: any) { }
 
   async get(key: string): Promise<CacheEntry | null> {
     try {
@@ -187,9 +187,9 @@ export class CacheManager {
     this.store = store || new MemoryCacheStore();
   }
 
-  async get<T>(key: string): Promise<T | null> {
+  async get<T>(key: string): Promise<CacheEntry | null> {
     const entry = await this.store.get(key);
-    return entry ? entry.data : null;
+    return entry;
   }
 
   async set<T>(key: string, data: T, config: CacheConfig): Promise<void> {
@@ -220,7 +220,7 @@ export class CacheManager {
   ): Promise<T> {
     const cached = await this.get<T>(key);
     if (cached !== null) {
-      return cached;
+      return cached.data;
     }
 
     const data = await fetcher();
@@ -264,6 +264,10 @@ export class CacheManager {
     }
 
     return headers;
+  }
+
+  async clear(): Promise<void> {
+    await this.store.clear();
   }
 }
 
@@ -352,33 +356,26 @@ export function withCache<T>(
   ): Promise<NextResponse> => {
     const cacheKey = keyGenerator(request);
 
-    // Check for conditional requests
-    const ifNoneMatch = request.headers.get('if-none-match');
-
     // Try to get from cache
-    const cached = await cacheManager.store.get(cacheKey);
+    const cachedEntry = await cacheManager.get(cacheKey);
 
-    if (cached) {
+    if (cachedEntry) {
       // Check ETag for conditional requests
-      if (ifNoneMatch && cached.etag === ifNoneMatch) {
-        return new NextResponse(null, { status: 304 });
+      const ifNoneMatch = request.headers.get('if-none-match');
+      if (ifNoneMatch && cachedEntry.etag === ifNoneMatch) {
+        return new NextResponse(null, { status: 304, headers: cachedEntry.headers });
       }
 
-      // Return cached response
-      const response = NextResponse.json(cached.data);
-
-      // Add cache headers
-      if (cached.headers) {
-        Object.entries(cached.headers).forEach(([key, value]) => {
-          response.headers.set(key, value);
-        });
-      }
-
-      if (cached.etag) {
-        response.headers.set('ETag', cached.etag);
-      }
-
+      // Use data and headers from the cached entry
+      const response = NextResponse.json(cachedEntry.data, { headers: cachedEntry.headers });
       response.headers.set('X-Cache', 'HIT');
+      // Add SWR headers
+      if (cachedEntry.ttl < (config.ttl + (config.staleWhileRevalidate || 0))) { // Re-evaluate TTL check
+        response.headers.set('Cache-Control', `public, max-age=${cachedEntry.ttl}, stale-while-revalidate=${config.staleWhileRevalidate || 0}`);
+      } else {
+        response.headers.set('Cache-Control', `public, max-age=${config.ttl}, stale-while-revalidate=${config.staleWhileRevalidate || 0}`);
+      }
+
       return response;
     }
 
@@ -428,6 +425,6 @@ export const cacheInvalidation = {
   },
 
   all: () => {
-    cacheManager.store.clear();
+    cacheManager.clear();
   },
 };

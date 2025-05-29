@@ -8,6 +8,10 @@ import {
   GetOriginAccessControlCommand,
   ListDistributionsCommand,
   CreateInvalidationCommand,
+  ViewerProtocolPolicy,
+  Method,
+  ItemSelection,
+  PriceClass,
 } from '@aws-sdk/client-cloudfront';
 
 import { config } from '../src/config';
@@ -32,7 +36,7 @@ interface CloudFrontSetupResult {
 
 async function createOriginAccessControl(): Promise<string> {
   console.log('🔐 Creating Origin Access Control...');
-  
+
   try {
     const command = new CreateOriginAccessControlCommand({
       OriginAccessControlConfig: {
@@ -46,7 +50,7 @@ async function createOriginAccessControl(): Promise<string> {
 
     const result = await cloudFrontClient.send(command);
     const oacId = result.OriginAccessControl?.Id;
-    
+
     if (!oacId) {
       throw new Error('Failed to create Origin Access Control');
     }
@@ -71,8 +75,8 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
     Comment: `Distribution for ${BUCKET_NAME} - Sports Celebrity Reels`,
     DefaultRootObject: 'index.html',
     Enabled: true,
-    PriceClass: 'PriceClass_All',
-    
+    PriceClass: PriceClass.PriceClass_All,
+
     Origins: {
       Quantity: 1,
       Items: [
@@ -89,19 +93,19 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
 
     DefaultCacheBehavior: {
       TargetOriginId: `${BUCKET_NAME}-origin`,
-      ViewerProtocolPolicy: 'redirect-to-https',
+      ViewerProtocolPolicy: ViewerProtocolPolicy.redirect_to_https,
       AllowedMethods: {
         Quantity: 7,
-        Items: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
+        Items: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'] as Method[],
         CachedMethods: {
           Quantity: 2,
-          Items: ['GET', 'HEAD'],
+          Items: ['GET', 'HEAD'] as Method[],
         },
       },
       ForwardedValues: {
         QueryString: false,
         Cookies: {
-          Forward: 'none',
+          Forward: 'none' as ItemSelection,
         },
         Headers: {
           Quantity: 0,
@@ -123,18 +127,18 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
         {
           PathPattern: 'videos/*',
           TargetOriginId: `${BUCKET_NAME}-origin`,
-          ViewerProtocolPolicy: 'redirect-to-https',
+          ViewerProtocolPolicy: ViewerProtocolPolicy.redirect_to_https,
           AllowedMethods: {
             Quantity: 2,
-            Items: ['GET', 'HEAD'],
+            Items: ['GET', 'HEAD'] as Method[],
             CachedMethods: {
               Quantity: 2,
-              Items: ['GET', 'HEAD'],
+              Items: ['GET', 'HEAD'] as Method[],
             },
           },
           ForwardedValues: {
             QueryString: false,
-            Cookies: { Forward: 'none' },
+            Cookies: { Forward: 'none' as ItemSelection },
           },
           TrustedSigners: {
             Enabled: false,
@@ -148,18 +152,18 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
         {
           PathPattern: 'thumbnails/*',
           TargetOriginId: `${BUCKET_NAME}-origin`,
-          ViewerProtocolPolicy: 'redirect-to-https',
+          ViewerProtocolPolicy: ViewerProtocolPolicy.redirect_to_https,
           AllowedMethods: {
             Quantity: 2,
-            Items: ['GET', 'HEAD'],
+            Items: ['GET', 'HEAD'] as Method[],
             CachedMethods: {
               Quantity: 2,
-              Items: ['GET', 'HEAD'],
+              Items: ['GET', 'HEAD'] as Method[],
             },
           },
           ForwardedValues: {
             QueryString: false,
-            Cookies: { Forward: 'none' },
+            Cookies: { Forward: 'none' as ItemSelection },
           },
           TrustedSigners: {
             Enabled: false,
@@ -173,18 +177,18 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
         {
           PathPattern: 'images/*',
           TargetOriginId: `${BUCKET_NAME}-origin`,
-          ViewerProtocolPolicy: 'redirect-to-https',
+          ViewerProtocolPolicy: ViewerProtocolPolicy.redirect_to_https,
           AllowedMethods: {
             Quantity: 2,
-            Items: ['GET', 'HEAD'],
+            Items: ['GET', 'HEAD'] as Method[],
             CachedMethods: {
               Quantity: 2,
-              Items: ['GET', 'HEAD'],
+              Items: ['GET', 'HEAD'] as Method[],
             },
           },
           ForwardedValues: {
             QueryString: false,
-            Cookies: { Forward: 'none' },
+            Cookies: { Forward: 'none' as ItemSelection },
           },
           TrustedSigners: {
             Enabled: false,
@@ -203,13 +207,13 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
       Items: [
         {
           ErrorCode: 403,
-          ResponseCode: 404,
+          ResponseCode: '404',
           ResponsePagePath: '/404.html',
           ErrorCachingMinTTL: 300,
         },
         {
           ErrorCode: 404,
-          ResponseCode: 404,
+          ResponseCode: '404',
           ResponsePagePath: '/404.html',
           ErrorCachingMinTTL: 300,
         },
@@ -224,7 +228,7 @@ async function createCloudFrontDistribution(originAccessControlId: string): Prom
 
     const result = await cloudFrontClient.send(command);
     const distribution = result.Distribution;
-    
+
     if (!distribution?.Id || !distribution?.DomainName) {
       throw new Error('Failed to create CloudFront distribution');
     }
@@ -249,17 +253,17 @@ async function waitForDistributionDeployment(distributionId: string): Promise<vo
 
   let attempts = 0;
   const maxAttempts = 60; // 30 minutes max
-  
+
   while (attempts < maxAttempts) {
     try {
       const command = new GetDistributionCommand({ Id: distributionId });
       const result = await cloudFrontClient.send(command);
-      
+
       if (result.Distribution?.Status === 'Deployed') {
         console.log('✅ Distribution deployed successfully!');
         return;
       }
-      
+
       console.log(`   Status: ${result.Distribution?.Status} (attempt ${attempts + 1}/${maxAttempts})`);
       await new Promise(resolve => setTimeout(resolve, 30000)); // Wait 30 seconds
       attempts++;
@@ -268,7 +272,7 @@ async function waitForDistributionDeployment(distributionId: string): Promise<vo
       attempts++;
     }
   }
-  
+
   console.log('⚠️  Distribution deployment is taking longer than expected.');
   console.log('   You can check the status in the AWS Console.');
 }
@@ -288,7 +292,7 @@ async function setupCloudFront(): Promise<CloudFrontSetupResult> {
     // Step 3: Wait for deployment (optional, can be skipped for faster setup)
     console.log('\n⚠️  Note: Distribution deployment can take 10-15 minutes.');
     console.log('   You can continue with other setup tasks while it deploys.');
-    
+
     const shouldWait = process.argv.includes('--wait');
     if (shouldWait) {
       await waitForDistributionDeployment(result.distributionId);

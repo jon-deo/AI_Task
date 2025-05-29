@@ -9,6 +9,7 @@ import {
   UploadPartCommand,
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
+  ObjectCannedACL,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -31,6 +32,8 @@ export interface S3UploadOptions {
   contentType?: string;
   metadata?: Record<string, string>;
   prefix?: string;
+  cacheControl?: string;
+  acl?: ObjectCannedACL;
 }
 
 export interface S3UploadResult {
@@ -40,6 +43,7 @@ export interface S3UploadResult {
   etag: string;
   size: number;
   contentType: string;
+  cloudFrontUrl?: string;
 }
 
 export interface PresignedUrlOptions {
@@ -51,9 +55,16 @@ export interface PresignedUrlOptions {
   metadata?: Record<string, string>;
 }
 
-export interface MultipartUploadOptions extends S3UploadOptions {
+export interface MultipartUploadOptions {
+  folder: 'VIDEOS' | 'THUMBNAILS' | 'IMAGES' | 'TEMP' | 'PROCESSED';
+  filename: string;
+  contentType?: string;
+  prefix?: string;
   partSize?: number;
   maxConcurrency?: number;
+  cacheControl?: string;
+  acl?: ObjectCannedACL;
+  metadata?: Record<string, string>;
 }
 
 export interface S3ListResult {
@@ -94,6 +105,8 @@ export class S3Service {
         Body: file,
         ContentType: contentType,
         Metadata: metadata,
+        CacheControl: options.cacheControl || this.getDefaultCacheControl(folder),
+        ACL: options.acl || 'public-read',
       });
 
       const result = await this.client.send(command);
@@ -109,6 +122,7 @@ export class S3Service {
         etag: result.ETag || '',
         size: file.length,
         contentType,
+        cloudFrontUrl: S3_CONFIG.CLOUDFRONT.DOMAIN ? `https://${S3_CONFIG.CLOUDFRONT.DOMAIN}/${key}` : undefined,
       };
     } catch (error) {
       throw handleAWSError(error);

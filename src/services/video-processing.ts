@@ -93,7 +93,7 @@ export class VideoProcessingService {
       return {
         videoKey: videoUploadResult.key,
         videoUrl: videoUploadResult.url,
-        videoCloudFrontUrl: videoUploadResult.cloudFrontUrl,
+        videoCloudFrontUrl: videoUploadResult.cloudFrontUrl || '',
         thumbnailKey,
         thumbnailUrl,
         thumbnailCloudFrontUrl,
@@ -149,7 +149,7 @@ export class VideoProcessingService {
       return {
         key: uploadResult.key,
         url: uploadResult.url,
-        cloudFrontUrl: uploadResult.cloudFrontUrl,
+        cloudFrontUrl: uploadResult.cloudFrontUrl || '',
       };
     } catch (error) {
       console.error('Thumbnail generation failed:', error);
@@ -247,7 +247,7 @@ export class VideoProcessingService {
       results.push({
         key: uploadResult.key,
         url: uploadResult.url,
-        cloudFrontUrl: uploadResult.cloudFrontUrl,
+        cloudFrontUrl: uploadResult.cloudFrontUrl || '',
         size: `${size.width}x${size.height}`,
       });
     }
@@ -357,7 +357,7 @@ export class VideoProcessingService {
       return {
         key: uploadResult.key,
         url: uploadResult.url,
-        cloudFrontUrl: uploadResult.cloudFrontUrl,
+        cloudFrontUrl: uploadResult.cloudFrontUrl || '',
         webpKey,
         webpUrl,
         webpCloudFrontUrl,

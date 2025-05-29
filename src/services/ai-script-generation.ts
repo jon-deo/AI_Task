@@ -1,5 +1,6 @@
 import { openai, AI_CONFIG, PROMPT_TEMPLATES, handleOpenAIError, validateScriptContent, calculateTargetWords } from '@/lib/openai-config';
-import type { Celebrity, VoiceType } from '@/types';
+import type { Celebrity } from '@prisma/client';
+import { VoiceType } from '@prisma/client';
 
 export interface ScriptGenerationRequest {
   celebrity: Celebrity;
@@ -85,7 +86,7 @@ export class AIScriptGenerationService {
           wordCount: validation.wordCount,
           estimatedDuration: validation.estimatedDuration,
           targetDuration: request.duration,
-          voiceType: request.voiceType || 'MALE_NARRATOR',
+          voiceType: request.voiceType || VoiceType.MALE_NARRATOR,
           generationTime: Date.now() - startTime,
           model,
           tokensUsed: this.estimateTokensUsed(script, title, description, hashtags),
@@ -109,13 +110,13 @@ export class AIScriptGenerationService {
     const { celebrity, duration, customPrompt, tone, style, focusPoints } = request;
     const targetWords = calculateTargetWords(duration);
 
-    // Build context for the prompt
+    // Build context for the prompt, handling optional fields
     const context = {
       celebrityName: celebrity.name,
       sport: celebrity.sport,
-      position: celebrity.position || 'Player',
-      team: celebrity.team || 'Various teams',
-      nationality: celebrity.nationality,
+      position: celebrity.position || '', // Provide default empty string
+      team: celebrity.team || '', // Provide default empty string
+      nationality: celebrity.nationality || '', // Provide default empty string
       biography: celebrity.biography,
       achievements: celebrity.achievements.join(', '),
       duration: duration.toString(),
@@ -154,14 +155,14 @@ export class AIScriptGenerationService {
         });
 
         const script = response.choices[0]?.message?.content?.trim();
-        
+
         if (!script) {
           throw new Error('Empty script generated');
         }
 
         // Validate script meets requirements
         const validation = validateScriptContent(script);
-        
+
         if (!validation.valid && attempt < options.maxRetries) {
           console.warn(`Script validation failed on attempt ${attempt}:`, validation.issues);
           continue;
@@ -171,7 +172,7 @@ export class AIScriptGenerationService {
       } catch (error) {
         lastError = error as Error;
         console.warn(`Script generation attempt ${attempt} failed:`, error);
-        
+
         if (attempt < options.maxRetries) {
           // Wait before retry with exponential backoff
           await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -187,7 +188,7 @@ export class AIScriptGenerationService {
    */
   private static async generateTitle(celebrity: Celebrity, script: string): Promise<string> {
     const focusPoint = this.extractFocusPoint(script);
-    
+
     const prompt = this.buildPromptFromTemplate(
       PROMPT_TEMPLATES.TITLE_GENERATION,
       {
@@ -230,7 +231,7 @@ export class AIScriptGenerationService {
     duration: number
   ): Promise<string> {
     const scriptSummary = script.substring(0, 200) + '...';
-    
+
     const prompt = this.buildPromptFromTemplate(
       PROMPT_TEMPLATES.DESCRIPTION_GENERATION,
       {
@@ -270,7 +271,7 @@ export class AIScriptGenerationService {
    */
   private static async generateHashtags(celebrity: Celebrity, script: string): Promise<string[]> {
     const contentFocus = this.extractFocusPoint(script);
-    
+
     const prompt = this.buildPromptFromTemplate(
       PROMPT_TEMPLATES.HASHTAG_GENERATION,
       {
@@ -316,7 +317,7 @@ export class AIScriptGenerationService {
    */
   private static buildPromptFromTemplate(template: string, context: Record<string, string>): string {
     let prompt = template;
-    
+
     Object.entries(context).forEach(([key, value]) => {
       const placeholder = `{${key}}`;
       prompt = prompt.replace(new RegExp(placeholder, 'g'), value);
@@ -365,7 +366,7 @@ export class AIScriptGenerationService {
     // Process in batches to avoid rate limits
     for (let i = 0; i < requests.length; i += concurrency) {
       const batch = requests.slice(i, i + concurrency);
-      
+
       const batchResults = await Promise.allSettled(
         batch.map(async (request) => {
           try {

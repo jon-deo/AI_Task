@@ -1,20 +1,8 @@
 // Fallback type definitions (when @prisma/client is not available)
 // TODO: Replace with actual Prisma imports after running `npm install`
 
-export interface Celebrity {
-  id: string;
-  name: string;
-  slug: string;
-  sport: string;
-  imageUrl: string | null;
-  biography: string;
-  achievements: string[];
-  birthDate: Date | null;
-  nationality: string | null;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
+// Removed outdated Celebrity interface
+// export interface Celebrity { ... }
 
 export interface VideoReel {
   id: string;
@@ -50,11 +38,7 @@ export enum VideoStatus {
 
 export enum VoiceType {
   MALE_NARRATOR = 'MALE_NARRATOR',
-  FEMALE_NARRATOR = 'FEMALE_NARRATOR',
-  SPORTS_COMMENTATOR = 'SPORTS_COMMENTATOR',
-  DOCUMENTARY_STYLE = 'DOCUMENTARY_STYLE',
-  ENERGETIC_HOST = 'ENERGETIC_HOST',
-  CALM_NARRATOR = 'CALM_NARRATOR',
+  FEMALE_NARRATOR = 'FEMALE_NARRATOR'
 }
 
 export enum Sport {
@@ -75,7 +59,7 @@ export enum GenerationStatus {
   PROCESSING = 'PROCESSING',
   COMPLETED = 'COMPLETED',
   FAILED = 'FAILED',
-  CANCELLED = 'CANCELLED',
+  CANCELLED = 'CANCELLED'
 }
 
 export interface GenerationJob {
@@ -102,21 +86,6 @@ export interface GenerationJob {
     id: string;
     name: string;
     sport: Sport;
-  };
-}
-
-// Extended types with relations
-export interface CelebrityWithStats extends Celebrity {
-  videoReels?: VideoReel[];
-}
-
-export interface VideoReelWithDetails extends VideoReel {
-  celebrity: {
-    id: string;
-    name: string;
-    slug: string;
-    sport: string;
-    imageUrl: string | null;
   };
 }
 

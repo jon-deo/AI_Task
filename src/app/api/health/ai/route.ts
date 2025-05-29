@@ -5,11 +5,8 @@ import { checkPollyHealth } from '@/lib/polly-config';
 import { AIScriptGenerationService } from '@/services/ai-script-generation';
 import { SpeechSynthesisService } from '@/services/speech-synthesis';
 import { VideoGenerationService } from '@/services/video-generation';
-import { VoiceId, OutputFormat } from '@aws-sdk/client-polly';
 import { VoiceType } from '@/types';
-import type { Celebrity } from '@/types';
 
-type ServiceStatus = 'healthy' | 'unhealthy' | 'unknown' | 'degraded';
 
 /**
  * GET /api/health/ai - Check AI services health
@@ -95,7 +92,7 @@ async function testScriptGeneration(): Promise<{
   error?: string;
 }> {
   const startTime = Date.now();
-  
+
   try {
     // Create a minimal test celebrity object
     const testCelebrity = {
@@ -160,10 +157,10 @@ async function testSpeechSynthesis(): Promise<{
   error?: string;
 }> {
   const startTime = Date.now();
-  
+
   try {
     const testText = 'This is a health check test for speech synthesis.';
-    
+
     const result = await SpeechSynthesisService.synthesizeSpeech({
       text: testText,
       voiceType: VoiceType.MALE_NARRATOR,
@@ -193,10 +190,10 @@ async function testSpeechSynthesis(): Promise<{
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { 
-      includeScriptTest = true, 
+    const {
+      includeScriptTest = true,
       includeSpeechTest = true,
-      includeIntegrationTest = false 
+      includeIntegrationTest = false
     } = body;
 
     const results = {
@@ -217,7 +214,7 @@ export async function POST(request: NextRequest) {
         checkOpenAIHealth(),
         checkPollyHealth(),
       ]);
-      
+
       results.tests.connection = {
         status: openaiHealth.healthy && pollyHealth.healthy ? 'passed' : 'failed',
         duration: Date.now() - startTime,
@@ -258,7 +255,7 @@ export async function POST(request: NextRequest) {
         // This would test the full video generation pipeline
         // For now, we'll just simulate it
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         results.tests.integration = {
           status: 'passed',
           duration: Date.now() - startTime,
@@ -277,7 +274,7 @@ export async function POST(request: NextRequest) {
     const testResults = Object.values(results.tests)
       .filter(test => test.status !== 'skipped')
       .map(test => test.status);
-    
+
     if (testResults.every(status => status === 'passed')) {
       results.overall = 'passed';
     } else if (testResults.some(status => status === 'passed')) {
@@ -286,13 +283,13 @@ export async function POST(request: NextRequest) {
       results.overall = 'failed';
     }
 
-    const statusCode = results.overall === 'passed' ? 200 : 
-                      results.overall === 'partial' ? 200 : 500;
+    const statusCode = results.overall === 'passed' ? 200 :
+      results.overall === 'partial' ? 200 : 500;
 
     return NextResponse.json(results, { status: statusCode });
   } catch (error) {
     console.error('AI test error:', error);
-    
+
     return NextResponse.json({
       timestamp: new Date().toISOString(),
       tests: {},
@@ -320,9 +317,18 @@ async function ensureTestCelebrity() {
         achievements: ['Test Achievement'],
         nationality: 'USA',
         isActive: true,
-        totalViews: BigInt(0),
-        totalLikes: BigInt(0),
-        totalShares: BigInt(0),
+        isVerified: true,
+        position: 'Quarterback',
+        team: 'Test Team',
+        birthDate: new Date('1990-01-01'),
+        thumbnailUrl: 'https://example.com/test-thumb.jpg',
+        socialLinks: {
+          twitter: 'https://twitter.com/testathlete',
+          instagram: 'https://instagram.com/testathlete'
+        },
+        metaTitle: 'Test Athlete - Professional Football Player',
+        metaDescription: 'Test Athlete is a professional football player known for their achievements.',
+        keywords: ['football', 'test', 'athlete']
       },
     });
   }

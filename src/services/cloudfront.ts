@@ -4,6 +4,9 @@ import {
   ListInvalidationsCommand,
   GetDistributionCommand,
   ListDistributionsCommand,
+  InvalidationSummary,
+  Origin,
+  DistributionSummary,
 } from '@aws-sdk/client-cloudfront';
 
 import { cloudFrontClient, S3_CONFIG, handleAWSError } from '@/lib/aws-config';
@@ -42,7 +45,7 @@ export class CloudFrontService {
   ): Promise<InvalidationResult> {
     try {
       const callerReference = options.callerReference || `invalidation-${Date.now()}`;
-      
+
       const command = new CreateInvalidationCommand({
         DistributionId: distributionId,
         InvalidationBatch: {
@@ -111,7 +114,7 @@ export class CloudFrontService {
       const result = await cloudFrontClient.send(command);
       const invalidations = result.InvalidationList?.Items || [];
 
-      return invalidations.map((invalidation) => ({
+      return invalidations.map((invalidation: InvalidationSummary) => ({
         id: invalidation.Id!,
         status: invalidation.Status!,
         createTime: invalidation.CreateTime!,
@@ -140,7 +143,7 @@ export class CloudFrontService {
         domainName: distribution.DomainName!,
         status: distribution.Status!,
         enabled: config.Enabled!,
-        origins: config.Origins!.Items!.map((origin) => ({
+        origins: config.Origins!.Items!.map((origin: Origin) => ({
           id: origin.Id!,
           domainName: origin.DomainName!,
           originPath: origin.OriginPath || '',
@@ -160,12 +163,12 @@ export class CloudFrontService {
       const result = await cloudFrontClient.send(command);
       const distributions = result.DistributionList?.Items || [];
 
-      return distributions.map((distribution) => ({
+      return distributions.map((distribution: DistributionSummary) => ({
         id: distribution.Id!,
         domainName: distribution.DomainName!,
         status: distribution.Status!,
         enabled: distribution.Enabled!,
-        origins: distribution.Origins!.Items!.map((origin) => ({
+        origins: distribution.Origins!.Items!.map((origin: Origin) => ({
           id: origin.Id!,
           domainName: origin.DomainName!,
           originPath: origin.OriginPath || '',
@@ -231,7 +234,7 @@ export class CloudFrontService {
 
     while (Date.now() - startTime < maxWaitTime) {
       const status = await this.getInvalidationStatus(distributionId, invalidationId);
-      
+
       if (status.status === 'Completed') {
         return status;
       }
@@ -250,7 +253,7 @@ export class CloudFrontService {
     if (S3_CONFIG.CLOUDFRONT.DOMAIN) {
       return `https://${S3_CONFIG.CLOUDFRONT.DOMAIN}/${key}`;
     }
-    
+
     // Fallback to S3 URL if CloudFront not configured
     return `https://${S3_CONFIG.BUCKET_NAME}.s3.${S3_CONFIG.REGION}.amazonaws.com/${key}`;
   }
@@ -266,7 +269,7 @@ export class CloudFrontService {
   ): string {
     // Note: This is a simplified version. In production, you'd use
     // the CloudFront SDK's getSignedUrl function with proper key management
-    
+
     if (!S3_CONFIG.CLOUDFRONT.DOMAIN) {
       throw new Error('CloudFront domain not configured');
     }

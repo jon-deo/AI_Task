@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback, useMemo, Suspense, memo } from 'react';
-import type { VideoReelWithDetails } from '@/types';
-import { debounce } from 'lodash';
 import { Video } from '@/types/video';
 import { useReels } from '@/hooks/use-reels';
 import { useInView } from 'react-intersection-observer';
+import { VideoReel, Celebrity } from '@prisma/client';
 
 // Use simple reel item to avoid hooks issues
 import { SimpleReelItem as ReelItem } from './simple-reel-item';
@@ -47,7 +46,7 @@ const useVideoCache = () => {
 };
 
 interface ReelsContainerProps {
-  initialReels?: VideoReelWithDetails[];
+  initialReels?: (VideoReel & { celebrity: Celebrity | null })[];
   autoPlay?: boolean;
   enableInfiniteScroll?: boolean;
   onGenerate: (celebrity: string) => Promise<any>;
@@ -79,9 +78,6 @@ export const ReelsContainer = memo(function ReelsContainer({
     hasMore = false,
     loadMore = () => { },
     refresh = () => { },
-    likeReel = async () => { },
-    shareReel = async () => { },
-    updateViews = async () => { },
   } = useReels({
     initialData: initialReels || [],
     autoLoad: true,

@@ -271,9 +271,6 @@ export async function POST(request: NextRequest) {
         slug: uniqueSlug,
         isPublic: isPublished ?? false,
         isFeatured: featured ?? false,
-        views: BigInt(0),
-        likes: BigInt(0),
-        shares: BigInt(0),
         script: '', // Required field
         fileSize: BigInt(0), // Required field
         resolution: '1080p', // Required field
@@ -296,12 +293,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update celebrity reel count
-    await prisma.celebrity.update({
-      where: { id: validatedData.celebrityId },
-      data: { reelsCount: { increment: 1 } },
-    });
-
     // Invalidate cache
     await cacheManager.invalidateByTag('reel');
     await cacheManager.invalidateByTag('celebrity');
@@ -309,10 +300,6 @@ export async function POST(request: NextRequest) {
     // Transform BigInt fields to strings for JSON serialization
     const transformedReel = {
       ...reel,
-      views: reel.views.toString(),
-      likes: reel.likes.toString(),
-      shares: reel.shares.toString(),
-      comments: reel.comments.toString(),
       fileSize: reel.fileSize.toString(),
     };
 

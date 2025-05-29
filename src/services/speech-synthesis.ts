@@ -7,7 +7,7 @@ import {
   getVoiceConfig,
   type VoiceRegion,
 } from '@/lib/polly-config';
-import { VoiceType } from '@/types';
+import { VoiceType } from '@prisma/client';
 import { S3Service } from '@/services/s3';
 
 export interface SpeechSynthesisRequest {
@@ -72,7 +72,7 @@ export class SpeechSynthesisService {
     try {
       const client = this.getClient();
       const voiceConfig = getVoiceConfig(request.voiceType, request.voiceRegion);
-      
+
       const command = new SynthesizeSpeechCommand({
         Engine: 'neural',
         LanguageCode: 'en-US',
@@ -84,7 +84,7 @@ export class SpeechSynthesisService {
 
       const startTime = Date.now();
       const response = await client.send(command);
-      
+
       if (!response.AudioStream) {
         throw new Error('No audio stream received from Polly');
       }
@@ -101,7 +101,7 @@ export class SpeechSynthesisService {
         try {
           // Generate a unique filename
           const filename = `voice_${Date.now()}_${Math.random().toString(36).substring(2)}.${request.outputFormat || 'mp3'}`;
-          
+
           // Upload to S3 using S3Service
           const uploadResult = await S3Service.uploadFile(audioBuffer, {
             folder: 'TEMP',
@@ -169,12 +169,12 @@ export class SpeechSynthesisService {
           ...request,
           text: chunk,
         }, uploadToS3);
-        
+
         // Ensure we have a valid audio buffer
         if (!result.audioBuffer) {
           throw new Error('Failed to generate audio buffer for chunk');
         }
-        
+
         results.push(result);
       }
 
@@ -198,7 +198,7 @@ export class SpeechSynthesisService {
       if (uploadToS3) {
         try {
           const filename = `voice_combined_${Date.now()}_${Math.random().toString(36).substring(2)}.${request.outputFormat || 'mp3'}`;
-          
+
           const uploadResult = await S3Service.uploadFile(combinedBuffer, {
             folder: 'TEMP',
             filename,
@@ -212,7 +212,7 @@ export class SpeechSynthesisService {
               chunkCount: chunks.length.toString(),
             },
           });
-          
+
           return {
             chunks: results,
             combinedAudioUrl: uploadResult.url,

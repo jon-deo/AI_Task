@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(results, { status: statusCode });
   } catch (error) {
     console.error('AWS health check error:', error);
-    
+
     return NextResponse.json({
       overall: 'unhealthy',
       responseTime: 0,
@@ -64,11 +64,11 @@ async function testS3Operations(): Promise<{
   duration: number;
 }> {
   const startTime = Date.now();
-  
+
   try {
     // Test listing files in videos folder
     const result = await S3Service.listFiles('VIDEOS', { maxKeys: 10 });
-    
+
     return {
       canList: true,
       fileCount: result.files.length,
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
           contentType: 'text/plain',
           prefix: 'test_',
         });
-        
+
         testKey = uploadResult.key;
         results.tests.upload = {
           status: 'passed',
@@ -181,8 +181,8 @@ export async function POST(request: NextRequest) {
           status: 'passed',
           duration: Date.now() - startTime,
           details: {
-            contentLength: downloadResult.contentLength,
-            contentType: downloadResult.contentType,
+            contentLength: downloadResult.length,
+            contentType: 'text/plain',
           },
         };
       } catch (error) {
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
     const testResults = Object.values(results.tests)
       .filter(test => test.status !== 'skipped')
       .map(test => test.status);
-    
+
     if (testResults.every(status => status === 'passed')) {
       results.overall = 'passed';
     } else if (testResults.some(status => status === 'passed')) {
@@ -226,13 +226,13 @@ export async function POST(request: NextRequest) {
       results.overall = 'failed';
     }
 
-    const statusCode = results.overall === 'passed' ? 200 : 
-                      results.overall === 'partial' ? 200 : 500;
+    const statusCode = results.overall === 'passed' ? 200 :
+      results.overall === 'partial' ? 200 : 500;
 
     return NextResponse.json(results, { status: statusCode });
   } catch (error) {
     console.error('AWS test error:', error);
-    
+
     return NextResponse.json({
       timestamp: new Date().toISOString(),
       tests: {},

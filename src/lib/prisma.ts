@@ -9,7 +9,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: config.isDev ? ['query', 'error', 'warn'] : ['error'],
+  log: config.nodeEnv === 'development' ? ['query', 'error', 'warn'] : ['error'],
   datasources: {
     db: {
       url: config.database.url,
@@ -17,7 +17,7 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   },
 });
 
-if (config.isDev) globalForPrisma.prisma = prisma;
+if (config.nodeEnv === 'development') globalForPrisma.prisma = prisma;
 
 // Database connection helper
 export async function connectToDatabase() {
@@ -49,16 +49,16 @@ export async function checkDatabaseHealth() {
     await prisma.$queryRaw`SELECT 1`;
     return { healthy: true, message: 'Database is healthy' };
   } catch (error) {
-    return { 
-      healthy: false, 
-      message: `Database health check failed: ${error}` 
+    return {
+      healthy: false,
+      message: `Database health check failed: ${error}`
     };
   }
 }
 
 // Database transaction helper
 export async function withTransaction<T>(
-  callback: (tx: PrismaClient) => Promise<T>
+  callback: (tx: PrismaTransactionClient) => Promise<T>
 ): Promise<T> {
   return await prisma.$transaction(callback);
 }
@@ -81,14 +81,14 @@ export async function bulkUpsert<T>(
   data: T[],
   uniqueField: keyof T
 ) {
-  const operations = data.map((item) => 
+  const operations = data.map((item) =>
     (prisma as any)[model].upsert({
       where: { [uniqueField as string]: item[uniqueField] },
       update: item,
       create: item,
     })
   );
-  
+
   return await Promise.all(operations);
 }
 
@@ -117,67 +117,8 @@ export async function searchContent(
       }
     })
   );
-  
-  return results.flat();
-}
 
-// Analytics aggregation helper
-export async function getAnalyticsSummary(
-  startDate: Date,
-  endDate: Date
-) {
-  const [videoAnalytics, systemAnalytics] = await Promise.all([
-    prisma.videoAnalytics.aggregate({
-      where: {
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      _sum: {
-        views: true,
-        uniqueViews: true,
-        likes: true,
-        shares: true,
-        comments: true,
-      },
-      _avg: {
-        avgWatchTime: true,
-        completionRate: true,
-        likeRate: true,
-        shareRate: true,
-      },
-    }),
-    prisma.systemAnalytics.aggregate({
-      where: {
-        date: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      _sum: {
-        totalUsers: true,
-        activeUsers: true,
-        newUsers: true,
-        totalVideos: true,
-        newVideos: true,
-        totalViews: true,
-        totalLikes: true,
-        totalShares: true,
-        aiApiCalls: true,
-        aiCost: true,
-      },
-      _avg: {
-        avgLoadTime: true,
-        errorRate: true,
-      },
-    }),
-  ]);
-  
-  return {
-    video: videoAnalytics,
-    system: systemAnalytics,
-  };
+  return results.flat();
 }
 
 // Performance monitoring
@@ -188,9 +129,9 @@ export async function logSlowQuery(
 ) {
   if (duration > threshold) {
     console.warn(`🐌 Slow query detected (${duration}ms):`, query);
-    
+
     // In production, you might want to send this to a monitoring service
-    if (config.isProd) {
+    if (config.nodeEnv === 'production') {
       // await sendToMonitoringService({ query, duration, timestamp: new Date() });
     }
   }
@@ -200,7 +141,7 @@ export async function logSlowQuery(
 export async function seedDatabase() {
   try {
     console.log('🌱 Starting database seeding...');
-    
+
     // Create sample celebrities
     const celebrities = await prisma.celebrity.createMany({
       data: [
@@ -244,25 +185,25 @@ export async function seedDatabase() {
       ],
       skipDuplicates: true,
     });
-    
+
     console.log(`✅ Created ${celebrities.count} celebrities`);
-    
+
     // Create sample users
-    const users = await prisma.user.createMany({
-      data: [
-        {
-          email: 'demo@example.com',
-          username: 'demo_user',
-          displayName: 'Demo User',
-          isActive: true,
-        },
-      ],
-      skipDuplicates: true,
-    });
-    
-    console.log(`✅ Created ${users.count} users`);
+    // const users = await prisma.user.createMany({
+    //   data: [
+    //     {
+    //       email: 'demo@example.com',
+    //       username: 'demo_user',
+    //       displayName: 'Demo User',
+    //       isActive: true,
+    //     },
+    //   ],
+    //   skipDuplicates: true,
+    // });
+
+    // console.log(`✅ Created ${users.count} users`);
     console.log('🎉 Database seeding completed!');
-    
+
     return true;
   } catch (error) {
     console.error('❌ Database seeding failed:', error);

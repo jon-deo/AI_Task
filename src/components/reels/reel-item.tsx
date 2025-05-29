@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import type { VideoReelWithDetails } from '@/types';
 import { VideoPlayer, VideoPlayerRef } from './video-player';
 import { CelebrityInfo } from './celebrity-info';
+import { VideoReel, Celebrity } from '@prisma/client';
 
 interface ReelItemProps {
-  reel: VideoReelWithDetails;
+  reel: VideoReel & { celebrity: Celebrity | null };
   isActive: boolean;
   autoPlay?: boolean;
   onVideoEnd: () => void;
@@ -65,7 +65,17 @@ export function ReelItem({
       )}
       <div className="absolute inset-0 flex">
         <div className="flex-1 flex flex-col justify-end p-4 pb-20">
-          <CelebrityInfo celebrity={reel.celebrity} />
+          {reel.celebrity && (
+            <CelebrityInfo
+              celebrity={{
+                id: reel.celebrity.id,
+                name: reel.celebrity.name,
+                slug: reel.celebrity.slug,
+                sport: reel.celebrity.sport,
+                imageUrl: reel.celebrity.imageUrl,
+              }}
+            />
+          )}
           <div className="mt-4">
             <h3 className="text-white font-semibold text-lg mb-2 line-clamp-2">{reel.title}</h3>
             <p className="text-white/80 text-sm line-clamp-3 mb-3">{reel.description}</p>

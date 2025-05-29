@@ -32,12 +32,9 @@ async function checkTableCounts(): Promise<HealthCheckResult> {
     const counts = await Promise.all([
       prisma.celebrity.count(),
       prisma.videoReel.count(),
-      prisma.user.count(),
-      prisma.userVideoLike.count(),
-      prisma.userVideoView.count(),
     ]);
 
-    const [celebrities, videos, users, likes, views] = counts;
+    const [celebrities, videos] = counts;
 
     return {
       status: 'healthy',
@@ -45,9 +42,6 @@ async function checkTableCounts(): Promise<HealthCheckResult> {
       details: {
         celebrities,
         videos,
-        users,
-        likes,
-        views,
       },
     };
   } catch (error) {
@@ -192,8 +186,7 @@ async function checkDiskSpace(): Promise<HealthCheckResult> {
     const diskSpace = await prisma.$queryRaw`
       SELECT 
         pg_size_pretty(pg_total_relation_size('celebrities')) as celebrities_size,
-        pg_size_pretty(pg_total_relation_size('video_reels')) as video_reels_size,
-        pg_size_pretty(pg_total_relation_size('user_video_views')) as views_size
+        pg_size_pretty(pg_total_relation_size('video_reels')) as video_reels_size
     `;
 
     return {
@@ -230,11 +223,11 @@ async function runHealthCheck(): Promise<void> {
     try {
       const result = await check();
       results.push({ name, result });
-      
-      const emoji = result.status === 'healthy' ? '✅' : 
-                   result.status === 'warning' ? '⚠️' : '❌';
+
+      const emoji = result.status === 'healthy' ? '✅' :
+        result.status === 'warning' ? '⚠️' : '❌';
       console.log(`${emoji} ${name}: ${result.message}`);
-      
+
       if (result.details && process.env.VERBOSE) {
         console.log(`   Details:`, JSON.stringify(result.details, null, 2));
       }

@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import type { Celebrity } from '@/types';
+import type { Celebrity } from '@prisma/client';
 
 export interface ImageGenerationOptions {
   width?: number;
@@ -138,7 +138,7 @@ export class ImageGenerator {
         </linearGradient>
       </defs>
       <rect width="${width}" height="${height}" fill="url(#grad${index})" />`,
-      
+
       `<defs>
         <linearGradient id="grad${index}" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" style="stop-color:#134e5e;stop-opacity:1" />
@@ -146,7 +146,7 @@ export class ImageGenerator {
         </linearGradient>
       </defs>
       <rect width="${width}" height="${height}" fill="url(#grad${index})" />`,
-      
+
       `<defs>
         <linearGradient id="grad${index}" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" style="stop-color:#667db6;stop-opacity:1" />
@@ -213,7 +213,7 @@ export class ImageGenerator {
       '#2d1b69', // Dark purple
       '#1e3c72', // Dark blue
     ];
-    
+
     return colors[index % colors.length] || baseColor;
   }
 
@@ -235,7 +235,7 @@ export class ImageGenerator {
     };
 
     const pattern = patterns[sport as keyof typeof patterns] || patterns.default;
-    
+
     return sharp(Buffer.from(pattern))
       .jpeg({ quality: 90 })
       .toBuffer();
@@ -249,13 +249,14 @@ export class ImageGenerator {
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="basketballGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#ff6b35;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#f7931e;stop-opacity:1" />
+            <stop offset="0%" style="stop-color:#ff7e5f;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#feb47b;stop-opacity:1" />
           </linearGradient>
         </defs>
         <rect width="${width}" height="${height}" fill="url(#basketballGrad)" />
-        <circle cx="${width * 0.2}" cy="${height * 0.3}" r="50" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.3" />
-        <circle cx="${width * 0.8}" cy="${height * 0.7}" r="30" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.2" />
+        <circle cx="${width * 0.5}" cy="${height * 0.5}" r="${Math.min(width, height) * 0.3}" 
+                fill="none" stroke="#ffffff" stroke-width="2" opacity="0.3" />
+        <line x1="0" y1="${height * 0.5}" x2="${width}" y2="${height * 0.5}" stroke="#ffffff" stroke-width="2" opacity="0.3" />
       </svg>
     `;
   }
@@ -315,9 +316,6 @@ export class ImageGenerator {
     `;
   }
 
-  /**
-   * Create baseball-themed pattern
-   */
   private static createBaseballPattern(width: number, height: number): string {
     return `
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
@@ -334,9 +332,6 @@ export class ImageGenerator {
     `;
   }
 
-  /**
-   * Create generic sports pattern
-   */
   private static createGenericSportsPattern(width: number, height: number): string {
     return `
       <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">

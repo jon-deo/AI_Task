@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { Prisma, VoiceType } from '@prisma/client';
 
 import { VideoGenerationService, type VideoGenerationRequest, type VideoGenerationProgress } from './video-generation';
 import { prisma } from '@/lib/prisma';
@@ -69,7 +70,7 @@ export class VideoGenerationQueue extends EventEmitter {
     options?: { delay?: number; maxAttempts?: number }
   ): Promise<string> {
     const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2)}`;
-    
+
     const job: QueueJob = {
       id: jobId,
       request,
@@ -89,14 +90,15 @@ export class VideoGenerationQueue extends EventEmitter {
         id: jobId,
         celebrityId: request.celebrity.id,
         status: 'PENDING',
-        prompt: request.customPrompt,
-        voiceType: request.voiceType || 'MALE_NARRATOR',
+        voiceType: request.voiceType || VoiceType.MALE_NARRATOR,
         duration: request.duration,
+        quality: request.quality || '1080p',
+        includeSubtitles: request.includeSubtitles ?? true,
       },
     });
 
     this.emit('jobAdded', job);
-    
+
     // Start processing if not already running
     if (!this.processing) {
       this.startProcessing();
@@ -181,13 +183,13 @@ export class VideoGenerationQueue extends EventEmitter {
    */
   private async startProcessing(): Promise<void> {
     if (this.processing) return;
-    
+
     this.processing = true;
     this.emit('processingStarted');
 
     while (this.processing) {
       const availableSlots = (this.options.maxConcurrency || 3) - this.activeJobs.size;
-      
+
       if (availableSlots <= 0) {
         // Wait for active jobs to complete
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -196,7 +198,7 @@ export class VideoGenerationQueue extends EventEmitter {
 
       // Get next jobs to process
       const pendingJobs = this.getJobs({ status: 'pending', limit: availableSlots });
-      
+
       if (pendingJobs.length === 0) {
         // No pending jobs, check if we should stop processing
         if (this.activeJobs.size === 0) {
@@ -204,7 +206,7 @@ export class VideoGenerationQueue extends EventEmitter {
           this.emit('processingCompleted');
           break;
         }
-        
+
         // Wait for active jobs
         await new Promise(resolve => setTimeout(resolve, 1000));
         continue;
@@ -245,10 +247,10 @@ export class VideoGenerationQueue extends EventEmitter {
       // Update database status
       await prisma.generationJob.update({
         where: { id: job.id },
-        data: { 
+        data: {
           status: 'PROCESSING',
-          startedAt: new Date(),
-          retryCount: job.attempts - 1,
+          progress: 0,
+          error: null,
         },
       });
 
@@ -265,7 +267,7 @@ export class VideoGenerationQueue extends EventEmitter {
       this.jobs.delete(job.id);
       this.activeJobs.delete(job.id);
       this.metrics.completedJobs++;
-      
+
       const processingTime = Date.now() - startTime;
       this.updateAverageProcessingTime(processingTime);
       this.updateMetrics();
@@ -281,15 +283,15 @@ export class VideoGenerationQueue extends EventEmitter {
         // Schedule retry with exponential backoff
         job.delay = Math.pow(2, job.attempts) * (this.options.retryDelay || 5000);
         job.error = undefined; // Clear error for retry
-        
+
         this.emit('jobRetry', job, error);
-        
+
         // Update database
         await prisma.generationJob.update({
           where: { id: job.id },
-          data: { 
+          data: {
             status: 'PENDING',
-            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            error: error instanceof Error ? error.message : 'Unknown error',
           },
         });
       } else {
@@ -303,10 +305,10 @@ export class VideoGenerationQueue extends EventEmitter {
         // Update database
         await prisma.generationJob.update({
           where: { id: job.id },
-          data: { 
+          data: {
             status: 'FAILED',
-            completedAt: new Date(),
-            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            progress: 0,
+            error: error instanceof Error ? error.message : 'Unknown error',
           },
         });
       }
@@ -393,8 +395,8 @@ export class VideoGenerationQueue extends EventEmitter {
     this.metrics.totalJobs = this.metrics.completedJobs + this.metrics.failedJobs + this.jobs.size;
     this.metrics.activeJobs = this.activeJobs.size;
     this.metrics.queuedJobs = this.jobs.size - this.activeJobs.size;
-    this.metrics.successRate = this.metrics.totalJobs > 0 
-      ? (this.metrics.completedJobs / this.metrics.totalJobs) * 100 
+    this.metrics.successRate = this.metrics.totalJobs > 0
+      ? (this.metrics.completedJobs / this.metrics.totalJobs) * 100
       : 0;
   }
 
@@ -405,8 +407,8 @@ export class VideoGenerationQueue extends EventEmitter {
     if (this.metrics.completedJobs === 1) {
       this.metrics.averageProcessingTime = newTime;
     } else {
-      this.metrics.averageProcessingTime = 
-        (this.metrics.averageProcessingTime * (this.metrics.completedJobs - 1) + newTime) / 
+      this.metrics.averageProcessingTime =
+        (this.metrics.averageProcessingTime * (this.metrics.completedJobs - 1) + newTime) /
         this.metrics.completedJobs;
     }
   }

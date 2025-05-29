@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import useSWR from 'swr';
 
-import type { VideoReelWithDetails, ApiResponse, PaginationInfo } from '@/types';
+import type { ApiResponse, PaginationInfo } from '@/types';
+import { VideoReel, Celebrity } from '@prisma/client';
 
 interface UseReelsOptions {
-  initialData?: VideoReelWithDetails[];
+  initialData?: (VideoReel & { celebrity: Celebrity | null })[];
   autoLoad?: boolean;
   limit?: number;
   sport?: string;
@@ -15,19 +16,19 @@ interface UseReelsOptions {
 }
 
 interface UseReelsReturn {
-  reels: VideoReelWithDetails[];
+  reels: (VideoReel & { celebrity: Celebrity | null })[];
   loading: boolean;
   error: string | null;
   hasMore: boolean;
   pagination: PaginationInfo | null;
   loadMore: () => void;
   refresh: () => void;
-  likeReel: (reelId: string) => Promise<void>;
-  shareReel: (reelId: string) => Promise<void>;
-  updateViews: (reelId: string) => Promise<void>;
+  // likeReel: (reelId: string) => Promise<void>;
+  // shareReel: (reelId: string) => Promise<void>;
+  // updateViews: (reelId: string) => Promise<void>;
 }
 
-const fetcher = async (url: string): Promise<ApiResponse<{ items: VideoReelWithDetails[]; pagination: PaginationInfo }>> => {
+const fetcher = async (url: string): Promise<ApiResponse<{ items: (VideoReel & { celebrity: Celebrity | null })[]; pagination: PaginationInfo }>> => {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error('Failed to fetch reels');
@@ -54,7 +55,7 @@ export function useReels(options: UseReelsOptions = {}): UseReelsReturn {
   } = options;
 
   const [page, setPage] = useState(1);
-  const [allReels, setAllReels] = useState<VideoReelWithDetails[]>(initialData);
+  const [allReels, setAllReels] = useState<(VideoReel & { celebrity: Celebrity | null })[]>(initialData);
   const [hasMore, setHasMore] = useState(true);
 
   // Build query parameters
@@ -102,8 +103,8 @@ export function useReels(options: UseReelsOptions = {}): UseReelsReturn {
       } else {
         // Subsequent pages - append to existing reels
         setAllReels(prev => {
-          const existingIds = new Set(prev.map((reel: VideoReelWithDetails) => reel.id));
-          const uniqueNewReels = newReels.filter((reel: VideoReelWithDetails) => !existingIds.has(reel.id));
+          const existingIds = new Set(prev.map((reel: (VideoReel & { celebrity: Celebrity | null })) => reel.id));
+          const uniqueNewReels = newReels.filter((reel: (VideoReel & { celebrity: Celebrity | null })) => !existingIds.has(reel.id));
           console.log('➕ Appending page', page, ':', uniqueNewReels.length, 'new reels');
           return [...prev, ...uniqueNewReels];
         });
@@ -134,106 +135,106 @@ export function useReels(options: UseReelsOptions = {}): UseReelsReturn {
   }, [mutate]);
 
   // Like a reel
-  const likeReel = useCallback(async (reelId: string) => {
-    try {
-      const response = await fetch(`/api/reels/${reelId}/like`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+  // const likeReel = useCallback(async (reelId: string) => {
+  //   try {
+  //     const response = await fetch(`/api/reels/${reelId}/like`, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //     });
 
-      if (!response.ok) {
-        throw new Error('Failed to like reel');
-      }
+  //     if (!response.ok) {
+  //       throw new Error('Failed to like reel');
+  //     }
 
-      // Optimistically update the reel
-      setAllReels(prev => prev.map(reel =>
-        reel.id === reelId
-          ? { ...reel, likes: reel.likes + BigInt(1) }
-          : reel
-      ));
+  //     // Optimistically update the reel
+  //     setAllReels(prev => prev.map(reel =>
+  //       reel.id === reelId
+  //         ? { ...reel, likes: reel.likes + BigInt(1) }
+  //         : reel
+  //     ));
 
-      // Revalidate data
-      mutate();
-    } catch (error) {
-      console.error('Error liking reel:', error);
-      throw error;
-    }
-  }, [mutate]);
+  //     // Revalidate data
+  //     mutate();
+  //   } catch (error) {
+  //     console.error('Error liking reel:', error);
+  //     throw error;
+  //   }
+  // }, [mutate]);
 
   // Share a reel
-  const shareReel = useCallback(async (reelId: string) => {
-    try {
-      const response = await fetch(`/api/reels/${reelId}/share`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          platform: 'COPY_LINK',
-        }),
-      });
+  // const shareReel = useCallback(async (reelId: string) => {
+  //   try {
+  //     const response = await fetch(`/api/reels/${reelId}/share`, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         platform: 'COPY_LINK',
+  //       }),
+  //     });
 
-      if (!response.ok) {
-        throw new Error('Failed to share reel');
-      }
+  //     if (!response.ok) {
+  //       throw new Error('Failed to share reel');
+  //     }
 
-      // Optimistically update the reel
-      setAllReels(prev => prev.map(reel =>
-        reel.id === reelId
-          ? { ...reel, shares: reel.shares + BigInt(1) }
-          : reel
-      ));
+  //     // Optimistically update the reel
+  //     setAllReels(prev => prev.map(reel =>
+  //       reel.id === reelId
+  //         ? { ...reel, shares: reel.shares + BigInt(1) }
+  //         : reel
+  //     ));
 
-      // Revalidate data
-      mutate();
-    } catch (error) {
-      console.error('Error sharing reel:', error);
-      throw error;
-    }
-  }, [mutate]);
+  //     // Revalidate data
+  //     mutate();
+  //   } catch (error) {
+  //     console.error('Error sharing reel:', error);
+  //     throw error;
+  //   }
+  // }, [mutate]);
 
   // Update view count
-  const updateViews = useCallback(async (reelId: string) => {
-    try {
-      const response = await fetch(`/api/reels/${reelId}/view`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          watchDuration: 5, // Minimum watch time to count as view
-          completionRate: 50,
-        }),
-      });
+  // const updateViews = useCallback(async (reelId: string) => {
+  //   try {
+  //     const response = await fetch(`/api/reels/${reelId}/view`, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         watchDuration: 5, // Minimum watch time to count as view
+  //         completionRate: 50,
+  //       }),
+  //     });
 
-      if (!response.ok) {
-        throw new Error('Failed to update view count');
-      }
+  //     if (!response.ok) {
+  //       throw new Error('Failed to update view count');
+  //     }
 
-      // Optimistically update the reel
-      setAllReels(prev => prev.map(reel =>
-        reel.id === reelId
-          ? { ...reel, views: reel.views + BigInt(1) }
-          : reel
-      ));
-    } catch (error) {
-      console.error('Error updating view count:', error);
-      // Don't throw error for view tracking failures
-    }
-  }, []);
+  //     // Optimistically update the reel
+  //     setAllReels(prev => prev.map(reel =>
+  //       reel.id === reelId
+  //         ? { ...reel, views: reel.views + BigInt(1) }
+  //         : reel
+  //     ));
+  //   } catch (error) {
+  //     console.error('Error updating view count:', error);
+  //     // Don't throw error for view tracking failures
+  //   }
+  // }, []);
 
   return {
     reels: allReels,
     loading: isLoading,
-    error: error?.message || null,
+    error: error ? error.message : null,
     hasMore,
     pagination: data?.data?.pagination || null,
     loadMore,
     refresh,
-    likeReel,
-    shareReel,
-    updateViews,
+    // likeReel,
+    // shareReel,
+    // updateViews,
   };
 }
