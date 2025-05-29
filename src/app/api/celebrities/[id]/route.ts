@@ -41,9 +41,20 @@ const rateLimitMiddleware = createRateLimitMiddleware(RATE_LIMITS.PUBLIC);
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id?: string } }
 ) {
   try {
+    // Validate params at runtime
+    if (!params?.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Celebrity ID is required',
+        },
+        { status: 400 }
+      );
+    }
+
     // Apply rate limiting
     const rateLimitResult = await rateLimitMiddleware(request);
     if (!rateLimitResult.allowed) {
@@ -158,9 +169,20 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id?: string } }
 ) {
   try {
+    // Validate params at runtime
+    if (!params?.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Celebrity ID is required',
+        },
+        { status: 400 }
+      );
+    }
+
     // Apply stricter rate limiting for updates
     const rateLimitResult = await createRateLimitMiddleware(RATE_LIMITS.ADMIN)(request);
     if (!rateLimitResult.allowed) {
@@ -298,9 +320,20 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id?: string } }
 ) {
   try {
+    // Validate params at runtime
+    if (!params?.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Celebrity ID is required',
+        },
+        { status: 400 }
+      );
+    }
+
     // Apply stricter rate limiting for deletion
     const rateLimitResult = await createRateLimitMiddleware(RATE_LIMITS.ADMIN)(request);
     if (!rateLimitResult.allowed) {
